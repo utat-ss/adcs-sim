@@ -1,0 +1,6 @@
+%% Sensor data for the TensorTech FSS-15
+sensor = struct(              ...
+    'fov',    120.00,         ...   % Field of view (full-cone) [deg]
+    'cov',    [0.5^2, 0.5^2]  ...   % Covariance [
+    );
+save('fss-15.mat', "sensor");
