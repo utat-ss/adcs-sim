@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ADCS Web Mission GUI</title>
+  </head>
+  <body>
+    <div id="app" class="app-shell">
+      <canvas id="mission-canvas" data-testid="mission-canvas"></canvas>
+
+      <header class="top-bar">
+        <div class="mission-title">
+          <span class="status-dot" aria-hidden="true"></span>
+          <div>
+            <strong>ADCS Orbit Operations</strong>
+            <span id="mission-subtitle">LEO-ADCS-2026</span>
+          </div>
+        </div>
+        <nav class="toolbar" aria-label="Mission controls">
+          <button id="play-toggle" class="icon-button" type="button" title="Pause or resume propagation" aria-label="Pause or resume propagation">II</button>
+          <button id="view-earth" class="icon-button" type="button" title="Earth view" aria-label="Earth view">E</button>
+          <button id="view-sat" class="icon-button" type="button" title="Satellite chase view" aria-label="Satellite chase view">S</button>
+          <button id="ambient-toggle" class="icon-button" type="button" title="Ambient display" aria-label="Ambient display">A</button>
+        </nav>
+      </header>
+
+      <aside class="panel left-panel" data-testid="control-panel" aria-label="Mission setup">
+        <form id="mission-form">
+          <section class="panel-section">
+            <div class="section-heading">
+              <span>Start Orbit</span>
+              <output id="period-output">95.2 min</output>
+            </div>
+            <div class="field-grid compact">
+              <label>
+                Altitude km
+                <input name="startAltitudeKm" type="number" min="180" max="36000" step="1" value="500" />
+              </label>
+              <label>
+                Eccentricity
+                <input name="startEccentricity" type="number" min="0" max="0.7" step="0.0001" value="0.001" />
+              </label>
+              <label>
+                Inclination deg
+                <input name="startInclinationDeg" type="number" min="0" max="180" step="0.1" value="51.6" />
+              </label>
+              <label>
+                RAAN deg
+                <input name="startRaanDeg" type="number" min="0" max="360" step="0.1" value="28" />
+              </label>
+              <label>
+                Arg periapsis deg
+                <input name="startArgPerigeeDeg" type="number" min="0" max="360" step="0.1" value="0" />
+              </label>
+              <label>
+                True anomaly deg
+                <input name="startTrueAnomalyDeg" type="number" min="0" max="360" step="0.1" value="12" />
+              </label>
+            </div>
+          </section>
+
+          <section class="panel-section">
+            <div class="section-heading">
+              <span>End Orbit</span>
+              <output id="dv-output">0.13 km/s</output>
+            </div>
+            <div class="field-grid compact">
+              <label>
+                Altitude km
+                <input name="endAltitudeKm" type="number" min="180" max="36000" step="1" value="650" />
+              </label>
+              <label>
+                Eccentricity
+                <input name="endEccentricity" type="number" min="0" max="0.7" step="0.0001" value="0.001" />
+              </label>
+              <label>
+                Inclination deg
+                <input name="endInclinationDeg" type="number" min="0" max="180" step="0.1" value="54" />
+              </label>
+              <label>
+                RAAN deg
+                <input name="endRaanDeg" type="number" min="0" max="360" step="0.1" value="32" />
+              </label>
+              <label>
+                Arg periapsis deg
+                <input name="endArgPerigeeDeg" type="number" min="0" max="360" step="0.1" value="0" />
+              </label>
+              <label>
+                Target anomaly deg
+                <input name="endTrueAnomalyDeg" type="number" min="0" max="360" step="0.1" value="205" />
+              </label>
+            </div>
+          </section>
+
+          <section class="panel-section">
+            <div class="section-heading">
+              <span>Operations</span>
+              <output id="eclipse-output">Sunlit</output>
+            </div>
+            <div class="field-grid">
+              <label>
+                Trajectory
+                <select name="trajectoryMode">
+                  <option value="hohmann">Hohmann altitude change</option>
+                  <option value="natural">Natural propagation</option>
+                  <option value="plane-change">Plane change</option>
+                  <option value="phasing">Phasing orbit</option>
+                </select>
+              </label>
+              <label>
+                Pointing mode
+                <select name="pointingMode">
+                  <option value="auto">Auto mission phase</option>
+                  <option value="sun-track">Sun tracking</option>
+                  <option value="target-track">Target tracking</option>
+                  <option value="detumble">Detumbling</option>
+                  <option value="nadir">Nadir imaging</option>
+                  <option value="inertial">Inertial hold</option>
+                </select>
+              </label>
+              <label>
+                Duration h
+                <input name="durationHours" type="number" min="0.5" max="96" step="0.5" value="9" />
+              </label>
+              <label>
+                Epoch UTC
+                <input name="epochIso" type="datetime-local" value="2026-06-01T12:00" />
+              </label>
+              <label>
+                Target lat deg
+                <input name="targetLatDeg" type="number" min="-90" max="90" step="0.1" value="34.7" />
+              </label>
+              <label>
+                Target lon deg
+                <input name="targetLonDeg" type="number" min="-180" max="180" step="0.1" value="-86.6" />
+              </label>
+            </div>
+          </section>
+
+          <div class="form-actions">
+            <button id="apply-mission" class="primary-button" type="submit">Apply Mission</button>
+            <button id="reset-form" class="secondary-button" type="button">Defaults</button>
+          </div>
+        </form>
+      </aside>
+
+      <aside class="panel right-panel" data-testid="telemetry-panel" aria-label="Telemetry">
+        <section class="panel-section telemetry-hero">
+          <span id="phase-label" class="phase-pill">Detumble</span>
+          <strong id="mission-time">T+00:00:00</strong>
+          <span id="mission-date">2026-06-01 12:00 UTC</span>
+        </section>
+
+        <section class="panel-section">
+          <div class="section-heading">
+            <span>State Vector</span>
+            <output id="speed-output">7.61 km/s</output>
+          </div>
+          <dl class="telemetry-grid">
+            <div><dt>Radius</dt><dd id="radius-output">6878 km</dd></div>
+            <div><dt>Altitude</dt><dd id="altitude-output">500 km</dd></div>
+            <div><dt>Latitude</dt><dd id="lat-output">0.0 deg</dd></div>
+            <div><dt>Longitude</dt><dd id="lon-output">0.0 deg</dd></div>
+            <div><dt>Beta angle</dt><dd id="beta-output">0.0 deg</dd></div>
+            <div><dt>Solar power</dt><dd id="power-output">0 W</dd></div>
+          </dl>
+        </section>
+
+        <section class="panel-section">
+          <div class="section-heading">
+            <span>ADCS Frame</span>
+            <output id="mode-output">Auto</output>
+          </div>
+          <div class="operation-readout">
+            <div class="operation-row">
+              <span id="operation-label">Operation</span>
+              <output id="operation-progress-output">0%</output>
+            </div>
+            <div
+              class="operation-rail"
+              role="progressbar"
+              aria-labelledby="operation-label"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              aria-valuenow="0"
+            >
+              <span id="operation-progress"></span>
+            </div>
+            <div class="operation-meta">
+              <span id="operation-detail-output">Rate 0.000 deg/s</span>
+              <span id="operation-phase-output">Detumble 0%</span>
+            </div>
+          </div>
+          <div class="vector-readout">
+            <span>Camera boresight</span>
+            <code id="boresight-output">[0.00, 0.00, -1.00]</code>
+          </div>
+          <div class="vector-readout">
+            <span>Sun vector ECI</span>
+            <code id="sun-output">[1.00, 0.00, 0.00]</code>
+          </div>
+          <div class="vector-readout">
+            <span>Mag field</span>
+            <code id="mag-output">0.0 uT</code>
+          </div>
+        </section>
+
+        <section class="panel-section">
+          <div class="section-heading">
+            <span>Mission Phases</span>
+            <output id="samples-output">720 samples</output>
+          </div>
+          <ol id="phase-list" class="phase-list"></ol>
+        </section>
+      </aside>
+
+      <div class="bottom-strip">
+        <span id="data-source">Project defaults loaded</span>
+        <div class="timeline-rail" aria-hidden="true"><span id="timeline-progress"></span></div>
+        <span id="camera-readout">Orbit camera</span>
+        <span id="render-readout">WebGL active</span>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

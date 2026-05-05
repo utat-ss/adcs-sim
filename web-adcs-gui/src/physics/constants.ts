@@ -1,0 +1,10 @@
+export const MU_EARTH_KM3_S2 = 398600.4418;
+export const EARTH_RADIUS_KM = 6378.137;
+export const EARTH_POLAR_RADIUS_KM = 6356.7523142;
+export const EARTH_J2 = 1.08262668e-3;
+export const EARTH_ROTATION_RAD_S = 7.2921159e-5;
+export const SOLAR_CONSTANT_W_M2 = 1361;
+export const AU_KM = 149597870.7;
+export const MOON_MEAN_DISTANCE_KM = 384400;
+export const EARTH_MAG_DIPOLE_UT_EARTH3 = 31.2;
+export const J2000_MS = Date.UTC(2000, 0, 1, 11, 58, 55, 816);

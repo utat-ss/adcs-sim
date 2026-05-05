@@ -1,0 +1,26 @@
+{
+  "name": "adcs-web-gui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "sync:data": "node scripts/sync-adcs-data.mjs",
+    "dev": "npm run sync:data && vite --host 127.0.0.1",
+    "build": "npm run sync:data && tsc -b && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "validate": "npm run build && npm run test && npm run test:e2e"
+  },
+  "dependencies": {
+    "three": "^0.164.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.44.1",
+    "@types/node": "^20.12.12",
+    "@types/three": "^0.184.0",
+    "typescript": "^5.4.5",
+    "vite": "^5.2.11",
+    "vitest": "^1.6.0"
+  }
+}

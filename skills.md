@@ -1,6 +1,8 @@
 # ADCS Simulation — Domain Knowledge & Skills
 
-This document contains the **domain knowledge, mathematical models, physics, and references** used in the UTAT-SS ADCS closed-loop simulation for a 3U CubeSat. Every section lists the equations actually implemented, the parameter values chosen, and links to web sources that validate the assumptions and calculations.
+This document contains the **domain knowledge, mathematical models, physics, and references** used in the UTAT-SS ADCS closed-loop simulation for a 3U CubeSat. It mixes the math that is active in the current validated branch with higher-fidelity models that are architecturally planned but presently running compile-safe fallbacks.
+
+Use `builders/`, `reference.md`, and `docs/adcs_model_reading_guide.pdf` to determine whether a section below is currently live or still part of the intended higher-fidelity design.
 
 ---
 
@@ -26,7 +28,7 @@ q0² + q1² + q2² + q3² = 1
 
 ### Direction Cosine Matrix (DCM) from Quaternion
 
-The DCM `R` rotates vectors from the **ECI frame to the body frame**. Used in the sun sensor, star tracker, and magnetometer models.
+The DCM `R` rotates vectors from the **ECI frame to the body frame**. Used in the sun sensor, star tracker, magnetometer, and active gravity-gradient implementation. The same convention must be preserved across sensor and disturbance-torque blocks.
 
 ```
 R = [ 1 - 2(q2² + q3²),    2(q1·q2 + q0·q3),    2(q1·q3 - q0·q2) ;
@@ -89,6 +91,13 @@ Solved as:
 ω̇ = J⁻¹ · ( τ_ext − ω × (J · ω) )
 ```
 
+In the current validated branch, the live `Euler_RHS` block extends this baseline to include stored reaction-wheel momentum and wheel-body reaction torque:
+
+```
+H_total = J · ω + A_W · h_W
+ω̇ = J⁻¹ · ( τ_ext − ω × H_total − τ_rw,body )
+```
+
 where:
 - `J` — moment of inertia tensor (3×3, diagonal for principal axes)
 - `ω` — angular velocity vector in body frame [rad/s]
@@ -98,7 +107,7 @@ where:
 
 | Parameter | Value | Notes |
 |-----------|-------|-------|
-| `J` | `diag([0.05, 0.05, 0.08])` kg·m² | Approximate 3U CubeSat (10×10×30 cm) |
+| `J` | `diag([0.0333, 0.0333, 0.0067])` kg·m² | Uniform-density 4 kg, 10×10×30 cm cuboid baseline |
 
 ### References
 
@@ -139,9 +148,9 @@ q ← q / ‖q‖
 
 ---
 
-## 4. Orbital Mechanics — Keplerian Propagation
+## 4. Orbital Mechanics — Keplerian Propagation with J2 Secular Drift
 
-Two-body Keplerian orbit propagation. No J2 or higher-order perturbations are modeled.
+The orbit model uses a Keplerian propagator with first-order secular `J2` corrections applied to the angular elements and mean anomaly.
 
 ### Kepler's Equation
 
@@ -186,11 +195,26 @@ n = √(μ / a³)          [rad/s]
 T = 2π / n              [s]
 ```
 
+### First-Order J2 Secular Rates
+
+Using the semi-latus rectum `p = a(1 − e²)`:
+
+```
+Ω̇ = −(3/2) J2 n (R_e / p)² cos(i)
+
+ω̇ =  (3/4) J2 n (R_e / p)² (5 cos²(i) − 1)
+
+Ṁ = n + (3/4) J2 n (R_e / p)² √(1 − e²) (3 cos²(i) − 1)
+```
+
+These rates are integrated linearly over time and then used to reconstruct the ECI state from the evolving mean elements.
+
 ### Parameters
 
 | Parameter | Value | Notes |
 |-----------|-------|-------|
 | `μ_earth` | `3.986004418 × 10¹⁴` m³/s² | Earth gravitational parameter |
+| `J2_earth` | `1.08262668 × 10⁻³` | Earth second zonal harmonic |
 | `a` | `R_earth + 500 km = 6871 km` | Semi-major axis (LEO) |
 | `i` | `51.6°` | ISS-like inclination |
 | `e` | `≈ 0` | Near-circular orbit |
@@ -344,9 +368,10 @@ Six sun sensors mounted on the cube faces with boresights along the ±X, ±Y, ±
 2. For each sensor i with boresight n̂_i:
       angle_i = acos(s_body · n̂_i)
       valid_i = (angle_i < 60°)   — half-cone FOV
-3. Add Gaussian noise to each body-frame component:
+3. Sample at `fss_sample_rate` and hold the output between samples.
+4. Add Gaussian noise to each body-frame component:
       s_meas = s_body + N(0, σ²)    where σ = 0.5° (≈ 0.00873 rad)
-4. Weighted average of valid sensor readings (renormalized)
+5. Cosine-weighted average of valid sensor readings (renormalized)
 ```
 
 | Parameter | Value |
@@ -354,6 +379,7 @@ Six sun sensors mounted on the cube faces with boresights along the ±X, ±Y, ±
 | Boresights | `±X, ±Y, ±Z` body axes |
 | FOV | 60° half-cone |
 | Noise | 0.5° (1σ) per component |
+| Sample rate | `10 Hz` |
 
 **Reference:** [CubeSatShop — nanoSSOC-A60 Sun Sensor](https://www.cubesatshop.com/product/nano-ssoc-a60-sun-sensor/)
 
@@ -383,9 +409,21 @@ q_meas = q_true ⊗ δq    (quaternion multiplication)
 |------|----------------|--------|
 | Sun | 45° from boresight | Implemented |
 | Moon | 25° from boresight | Implemented |
-| Earth limb | 25° from boresight | Not yet implemented |
+| Earth limb | 25° beyond the apparent Earth disk | Implemented |
 
 When blinded by an exclusion zone, the star tracker **falls back to its last valid measurement**.
+
+**Earth-limb geometry:**
+
+```
+θ_earth = asin(R_earth / |r_sc|)
+θ_bore  = acos( b̂_ECI · (−r_sc / |r_sc|) )
+
+Blocked if:
+  θ_bore ≤ θ_earth + θ_margin
+```
+
+where `θ_margin = st_exclusion_earth`. The star tracker also updates at `2 Hz` and holds the last sample between updates.
 
 **Reference:** [CubeSatShop — ST200 Star Tracker](https://www.cubesatshop.com/product/st200-star-tracker/)
 
@@ -399,10 +437,10 @@ Measures body-frame angular velocity with bias and noise.
 
 ```
 Bias random walk:
-  bias(k+1) = bias(k) + √(dt) · σ_bias · randn(3,1)
+  bias(k+1) = bias(k) + √(Ts) · σ_bias · randn(3,1)
 
 Measurement:
-  ω_meas = ω_true + bias + (ARW / √dt) · randn(3,1)
+  ω_meas = ω_true + bias + (ARW / √Ts) · randn(3,1)
 ```
 
 | Parameter | Value | Notes |
@@ -410,6 +448,8 @@ Measurement:
 | ARW | `0.01 deg/√s` = `1.745 × 10⁻⁴ rad/√s` | Angular random walk |
 | Bias instability | `1.0 deg/hr` = `4.848 × 10⁻⁶ rad/s` | Long-term drift rate |
 | `σ_bias` | Derived from bias instability | Drives bias random walk |
+| Sample rate | `100 Hz` | Output held between samples |
+| Range | `±300 deg/s` | Per-axis saturation |
 
 **References:**
 
@@ -434,6 +474,7 @@ B_meas = B_body_true + b_hard + N(0, σ²)
 |-----------|-------|-------|
 | Hard-iron bias | `[50, −30, 80]` nT | Fixed offset per axis |
 | White noise | `100` nT per axis (1σ) | Gaussian |
+| Sample rate | `10 Hz` | Output held between samples |
 
 **Reference:** Typical CubeSat magnetometer specs (e.g., PNI RM3100)
 
@@ -454,12 +495,13 @@ v_meas = v_true + N(0, σ_vel²)
 |-----------|-------|
 | Position noise | `10` m per axis (1σ) |
 | Velocity noise | `0.1` m/s per axis (1σ) |
+| Sample rate | `1 Hz` |
 
 Simple white-noise model — no outage or multipath modeling.
 
 ---
 
-## 9. Attitude Estimation — TRIAD Method
+## 9. Attitude Estimation — TRIAD + MEKF
 
 Two-vector deterministic attitude determination. Produces a DCM (and then quaternion) from simultaneous observations of two known reference vectors.
 
@@ -506,6 +548,48 @@ The resulting DCM `A` is then converted to a quaternion using the **Shepperd met
 - [Wikipedia — Triad method](https://en.wikipedia.org/wiki/Triad_method)
 - Markley, "Attitude Determination using Two Vector Measurements"
 
+### 9.1 Multiplicative Extended Kalman Filter (MEKF)
+
+The estimator now uses TRIAD as a deterministic initialization / recovery step and runs a **multiplicative extended Kalman filter** for continuous attitude and gyro-bias estimation.
+
+**State:**
+
+```
+x = [δθ ; b_g]
+```
+
+where:
+- `δθ` is the 3-parameter attitude error state
+- `b_g` is the gyroscope bias estimate
+
+**Propagation:**
+
+```
+ω̂ = ω_meas − b_g
+q⁻ = δq(ω̂, Δt) ⊗ q
+```
+
+The covariance is propagated with the standard MEKF linearized state transition and process-noise matrices using `mekf_sigma_g` and `mekf_sigma_b`.
+
+**Measurement update:**
+
+Predicted body-frame vectors are formed from the propagated quaternion:
+
+```
+v̂_B = C_BI(q⁻) v_I
+```
+
+and compared against the measured Sun and magnetic-field vectors. When the Sun vector is unavailable (eclipse), the filter performs a magnetometer-only update. When the Sun vector returns after eclipse, the TRIAD solution is used to re-anchor the quaternion estimate.
+
+**Implemented tuning parameters:**
+
+| Parameter | Meaning |
+|-----------|---------|
+| `mekf_sigma_g` | Gyro process-noise proxy |
+| `mekf_sigma_b` | Gyro bias random-walk proxy |
+| `mekf_sun_sigma` | Sun-vector measurement noise |
+| `mekf_mag_sigma` | Normalized magnetic-vector measurement noise |
+
 ---
 
 ## 10. Control Laws
@@ -517,21 +601,21 @@ Proportional-derivative controller for three-axis attitude stabilization using r
 ### Equations
 
 ```
-τ_rw = −Kp · q_err − Kd · ω_est
+τ_cmd = ω × (J·ω) − Kp · q_e,vec − Kd · (ω_est − ω_des)
 ```
 
 where:
-- `q_err = [q1; q2; q3]` — vector part of the estimated attitude error quaternion (small-angle approximation: `q_err ≈ θ_err / 2`)
-- `ω_est` — estimated angular velocity from IMU
-- **Shortest-path logic:** if `q0 < 0`, negate `q_err` to ensure rotation takes the shorter path
+- `q_e,vec` — vector part of the full error quaternion `q_e = q_d⁻¹ ⊗ q_est`
+- `ω_des` — desired LVLH angular rate from the reference generator
+- **Shortest-path logic:** if `q_e,0 < 0`, negate `q_e,vec` to ensure the controller commands the shorter rotation
 
 ### Parameters
 
 | Parameter | Value | Units |
 |-----------|-------|-------|
-| `Kp` | `0.002` | N·m |
-| `Kd` | `0.02` | N·m·s |
-| Target quaternion | `[1; 0; 0; 0]` | Identity (nadir or inertial hold) |
+| `Kp` | `0.01` | N·m |
+| `Kd` | `0.05` | N·m·s |
+| Target quaternion | `q_des` from LVLH | Nadir-pointing |
 
 ### Reference
 
@@ -563,13 +647,114 @@ m_cmd = clamp(m_cmd, −0.2, +0.2)    [A·m² per axis]
 
 | Parameter | Value | Notes |
 |-----------|-------|-------|
-| `k_bdot` | `10⁵` | Tuned for nT-scale field measurements |
+| `k_bdot` | `5 × 10⁴` | Tuned for T-scale body-field measurements |
 | Saturation | `±0.2 A·m²` | Per axis |
 
 ### References
 
 - [Wikipedia — B-dot controller](https://en.wikipedia.org/wiki/B-dot_controller)
 - Avanzini & Giulietti, "Magnetic Detumbling of a Rigid Spacecraft"
+
+---
+
+### 10.2.1 Web GUI Detumble Proxy
+
+The browser-side mission GUI does not run the full magnetorquer B-dot loop. For interactive visualization it uses a deterministic rate-decay proxy:
+
+```
+omega_detumble(t) = max(omega_floor, omega_0 * exp(-t / tau))
+```
+
+with `omega_0 = 1.8 deg/s`, `omega_floor = 0.03 deg/s`, and `tau = 900 s`. The visual tumble angle integrates this decaying rate, so the spacecraft rotation visibly slows as detumbling progresses. The UI progress value is:
+
+```
+progress = clamp((omega_0 - omega_detumble) / (omega_0 - omega_floor), 0, 1)
+```
+
+This proxy is for web-simulation feedback only; the Simulink controller remains the source of truth for actuator-level detumbling behavior.
+
+---
+
+### 10.3 Mode Management
+
+The controller now uses three flight states:
+
+1. **Detumble** — when body rate is above `mode_detumble_rate`
+2. **Coarse pointing** — when detumble is complete but attitude/rate thresholds for fine pointing are not met
+3. **Fine pointing** — when the spacecraft is close enough to the nadir reference for full closed-loop pointing
+
+Fine mode is also inhibited when wheel momentum is already close to saturation.
+
+### 10.4 Reaction-Wheel Momentum Desaturation
+
+Wheel unloading is implemented with a magnetic cross-product law:
+
+```
+h_body = A_W · h_W
+m_dump = −k_dump · (h_body × B_body) / |B_body|²
+```
+
+This commands a magnetorquer dipole that removes the wheel-momentum component perpendicular to the instantaneous geomagnetic field.
+
+| Parameter | Value |
+|-----------|-------|
+| `k_dump` | `0.02` |
+| Enable threshold | `0.6 × rw_max_momentum × √rw_num` |
+
+References:
+- Wertz, *Spacecraft Attitude Determination and Control*
+- Psiaki, "Magnetic Torquer Attitude Control via Asymptotic Periodic LQR"
+
+---
+
+### 10.5 Environmental Disturbance Torques
+
+The dynamics model now includes three additional environmental disturbance torques beyond gravity gradient.
+
+**Aerodynamic drag torque**
+
+An exponential density model is used around the operating altitude:
+
+```
+ρ(h) = ρ_ref · exp(−(h − h_ref) / H)
+```
+
+with panel forces computed from the relative atmospheric velocity and body-face projected area:
+
+```
+F_drag,i = −(1/2) ρ |v_rel|² C_D A_i max(0, n̂_i · (−v̂_rel)) v̂_rel
+τ_drag = Σ (r_COP,i × F_drag,i)
+```
+
+**Solar radiation pressure torque**
+
+The SRP force model is also panel-based and disabled during eclipse:
+
+```
+F_srp,i = P_solar C_r A_i max(0, n̂_i · ŝ_body) ŝ_body
+τ_srp = Σ (r_COP,i × F_srp,i)
+```
+
+where `P_solar = solar_flux / c`.
+
+**Residual magnetic dipole torque**
+
+```
+τ_mag = m_residual × B_body
+```
+
+This captures bias-like magnetic disturbances caused by onboard materials and currents.
+
+| Parameter | Value |
+|-----------|-------|
+| `drag_coeff` | `2.3` |
+| `atm_ref_density` | `6.967 × 10⁻¹³ kg/m³` |
+| `atm_scale_height` | `63.822 km` |
+| `srp_coeff` | `1.3` |
+| `residual_dipole` | `[5, 5, 5] mA·m²` |
+
+Reference:
+- NASA/TM-20210017131, environmental disturbance torque modeling overview
 
 ---
 
@@ -641,20 +826,27 @@ where:
 
 ---
 
-### 11.3 CMG (Placeholder)
+### 11.3 CMG (Representative Model)
 
-Control Moment Gyroscope — currently a **placeholder** that outputs zero torque.
-
-**Intended model:**
+The simulator now uses a simplified representative 3-CMG cluster. Each input is interpreted as a gimbal-rate request and converted to body torque through
 
 ```
-τ_cmg = dH/dt = h · (gimbal_rate × gimbal_axis)
+τ_cmg = dH/dt = Ω_g × h
 ```
 
-where:
-- `h` — stored angular momentum magnitude of the CMG rotor
-- `gimbal_rate` — rate of gimbal angle change
-- `gimbal_axis` — unit vector along the gimbal axis
+For the chosen virtual geometry, this reduces to
+
+```
+τ_body = h_cmg · [γ̇2; γ̇3; γ̇1]
+```
+
+with per-axis torque saturation applied after the mapping.
+
+| Parameter | Value |
+|-----------|-------|
+| Max torque | `0.01 N·m` |
+| Stored momentum | `0.5 N·m·s` |
+| Max gimbal rate | `1 rad/s` |
 
 ---
 
@@ -688,11 +880,64 @@ ephemeris_2026_weekly.csv
 | Constant | Symbol | Value | Units |
 |----------|--------|-------|-------|
 | Earth gravitational parameter | `μ` | `3.986004418 × 10¹⁴` | m³/s² |
+| Earth J2 | `J2` | `1.08262668 × 10⁻³` | — |
 | Earth mean radius | `R_e` | `6371` | km |
 | Equatorial magnetic field | `B₀` | `3.12 × 10⁻⁵` | T |
 | Dipole tilt angle | `θ_m` | `11.5` | degrees |
 | Dipole tilt longitude | `φ_m` | `−69` | degrees |
-| CubeSat inertia | `J` | `diag([0.05, 0.05, 0.08])` | kg·m² |
+| Solar radiation pressure at 1 AU | `P_solar` | `≈ 4.54 × 10⁻⁶` | N/m² |
+| CubeSat inertia | `J` | `diag([0.0333, 0.0333, 0.0067])` | kg·m² |
 | Orbital altitude | `h` | `500` | km |
 | Orbital inclination | `i` | `51.6` | degrees |
 | Orbital period | `T` | `≈ 5670` | s |
+## Web ADCS GUI Physics Notes
+
+The browser GUI in `web-adcs-gui/` uses a lightweight mission model intended for interactive visualization and parameter exploration. It is not a replacement for the Simulink dynamics, but the math should remain physically coherent with the simulator conventions.
+
+### Orbital Propagation
+
+For elliptical Earth orbits, the app propagates classical orbital elements with the two-body Kepler equation:
+
+```text
+n = sqrt(mu / a^3)
+M(t) = M0 + n t
+M = E - e sin(E)
+r_pf = p / (1 + e cos(nu)) [cos(nu), sin(nu), 0]
+v_pf = sqrt(mu / p) [-sin(nu), e + cos(nu), 0]
+p = a (1 - e^2)
+```
+
+The perifocal state is rotated to ECI by `R3(RAAN) R1(i) R3(arg_perigee)`. The app also applies first-order J2 secular drift for RAAN and argument of perigee:
+
+```text
+RAAN_dot = -3/2 J2 n (Re / p)^2 cos(i)
+argp_dot =  3/4 J2 n (Re / p)^2 (5 cos(i)^2 - 1)
+```
+
+### Transfers
+
+The Hohmann altitude-change estimate uses:
+
+```text
+a_t = (r1 + r2) / 2
+dv1 = |sqrt(mu (2/r1 - 1/a_t)) - sqrt(mu/r1)|
+dv2 = |sqrt(mu/r2) - sqrt(mu (2/r2 - 1/a_t))|
+t_transfer = pi sqrt(a_t^3 / mu)
+```
+
+Plane-change cost is approximated as:
+
+```text
+dv_plane = 2 v sin(delta_i / 2)
+```
+
+### Environment and ADCS
+
+- Eclipse is modeled with a cylindrical Earth shadow and a small penumbra smoothing width.
+- Sun vectors come from `ephemeris_2026_weekly.csv` when available, otherwise from a low-precision analytical solar model.
+- Moon vectors are visual context only unless a CSV provides them.
+- Magnetic field magnitude is a simple tilted dipole, suitable for GUI telemetry context but not high-fidelity magnetometer validation.
+- Attitude quaternions are scalar-first `[q0, q1, q2, q3]` until converted at the Three.js render boundary.
+- Browser-side fallback spacecraft values mirror the MATLAB default 4 kg, `0.10 x 0.10 x 0.30 m` 3U bus. When syncing from `init_adcs_params.m`, SI orbit lengths such as `orbit_alt` and `orbit_a` are converted to kilometers before mission propagation.
+- The Three.js scene uses a visual-only radial altitude exaggeration factor of `3.2` for rendered orbit and spacecraft positions. Numeric propagation, telemetry, delta-V estimates, eclipse checks, target visibility, and logged values stay in physical kilometers; only the browser display transform is exaggerated so LEO paths and spacecraft clearance are readable at Earth scale.
+- Near-circular browser orbit tests should compare instantaneous radius against the configured semi-major axis with an eccentricity-aware tolerance. Even `e = 0.001` produces roughly `a * e` radial variation, so hard-coding `R_e + altitude` as the instantaneous radius is too strict unless the test orbit is exactly circular.

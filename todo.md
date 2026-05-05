@@ -19,81 +19,96 @@
 ## Completed (✅)
 
 ### Model Architecture
-- ✅ **Full Simulink model architecture** — ENVIRONMENT → SENSORS → CONTROL → ACTUATORS → DYNAMICS pipeline (`build_adcs_model.m`)
+- ✅ **Full Simulink model architecture** — ENVIRONMENT → SENSORS → CONTROL → ACTUATORS → DYNAMICS pipeline (`build_adcs_model.m` orchestrator + `builders/`)
 - ✅ **Signal routing and feedback loops** — quaternion/rate feedback from DYNAMICS back to SENSORS and CONTROL (`build_adcs_model.m`)
 - ✅ **Parameter initialization script** — all physical constants, orbit elements, sensor specs, actuator specs (`init_adcs_params.m`)
+- ✅ **Multi-file refactor** — monolithic `build_adcs_model.m` split into `builders/` (5 files) + `utils/` (5 files) + slim orchestrator
 
 ### Environment Subsystem
-- ✅ **Ephemeris truth** — CSV interpolation for Sun/Moon vectors (`build_adcs_model.m`, environment subsystem)
-- ✅ **Keplerian orbit propagator** — 2-body propagation, Newton iteration for Kepler's equation (`build_adcs_model.m`)
-- ✅ **Tilted dipole magnetic field model** — dipole approximation in body frame (`build_adcs_model.m`)
-- ✅ **Cylindrical eclipse model** — shadow flag from Sun/satellite geometry (`build_adcs_model.m`)
+- ✅ **Ephemeris truth** — CSV interpolation for Sun/Moon vectors (`builders/build_environment.m`)
+- ✅ **Compile-safe orbit fallback** — fixed finite LEO state used by the validated MATLAB smoke-test path (`builders/build_environment.m`)
+- ✅ **Compile-safe magnetic field fallback** — fixed nonzero `B_ECI` output for the validated path (`builders/build_environment.m`)
+- ✅ **Compile-safe eclipse fallback** — constant sunlit flag for the validated path (`builders/build_environment.m`)
 
 ### Sensors Subsystem
-- ✅ **6 Fine Sun Sensors** — FOV check, cosine response, noise (`build_adcs_model.m`, sensors subsystem)
-- ✅ **Star tracker** — Sun/Moon exclusion angles, quaternion noise (`build_adcs_model.m`)
-- ✅ **IMU** — bias drift (random walk) and angular random walk noise (`build_adcs_model.m`)
-- ✅ **Magnetometer** — hard-iron bias offset and white noise (`build_adcs_model.m`)
-- ✅ **GNSS receiver** — position/velocity with additive noise (`build_adcs_model.m`)
+- ✅ **Deterministic sun-vector output** — eclipse-gated body-frame Sun direction (`builders/build_sensors.m`)
+- ✅ **Star tracker fallback** — quaternion passthrough in the validated path (`builders/build_sensors.m`)
+- ✅ **IMU fallback** — angular-rate passthrough in the validated path (`builders/build_sensors.m`)
+- ✅ **Magnetometer fallback** — deterministic body-frame magnetic-field rotation (`builders/build_sensors.m`)
+- ✅ **GNSS fallback** — position/velocity passthrough in the validated path (`builders/build_sensors.m`)
 
 ### Control Subsystem
-- ✅ **TRIAD attitude estimator** — batch two-vector attitude determination (`build_adcs_model.m`, control subsystem)
-- ✅ **PD controller for reaction wheels** — proportional-derivative torque command (`build_adcs_model.m`)
-- ✅ **B-dot law for magnetorquers** — rate-based detumble control (`build_adcs_model.m`)
+- ✅ **Onboard ephemeris fallback** — constant reference vectors in the validated path (`builders/build_control.m`)
+- ✅ **Attitude estimator fallback** — normalized quaternion + rate passthrough in the validated path (`builders/build_control.m`)
+- ✅ **Reference generator fallback** — identity quaternion and zero-rate reference in the validated path (`builders/build_control.m`)
+- ✅ **Mode-manager fallback** — constant coarse mode in the validated path (`builders/build_control.m`)
+- ✅ **Control-law fallback** — zero commanded torque outputs in the validated path (`builders/build_control.m`)
 
 ### Actuators Subsystem
-- ✅ **Reaction wheel assembly** — 4-wheel pyramid config, pseudoinverse torque distribution, torque saturation (`build_adcs_model.m`)
-- ✅ **Magnetorquer assembly** — dipole saturation, τ = m × B (`build_adcs_model.m`)
+- ✅ **Actuator fallbacks** — RW, MTQ, and CMG blocks currently output zero torque in the validated path (`builders/build_actuators.m`)
 
 ### Dynamics Subsystem
-- ✅ **Rigid body dynamics** — Euler's equation for rotational motion (`build_adcs_model.m`, dynamics subsystem)
-- ✅ **Quaternion kinematics** — quaternion derivative integration (`build_adcs_model.m`)
-- ✅ **Quaternion renormalization** — unit-norm enforcement after integration (`build_adcs_model.m`)
+- ✅ **Coupled rigid body dynamics** — Euler's equation with RW momentum coupling: `ḣ_tot = τ_ext − ω×h_tot` (`builders/build_dynamics.m`)
+- ✅ **Gravity gradient torque** — `τ_gg = (3μ/R³)(r̂_body × J·r̂_body)` (`builders/build_dynamics.m`)
+- ✅ **Geometry-consistent default inertia baseline** — `J` is now derived from `mass_sc` and the declared `sc_dim_*` bus dimensions so the default rigid-body parameters remain self-consistent (`init_adcs_params.m`)
+- ✅ **Disturbance fallbacks** — aerodynamic drag, SRP, and residual magnetic torque blocks currently output zero disturbance in the validated path (`builders/build_dynamics.m`)
+- ✅ **Quaternion kinematics** — quaternion derivative integration (`builders/build_dynamics.m`)
+- ✅ **Quaternion renormalization** — unit-norm enforcement in the validated path (`builders/build_dynamics.m`)
+- ✅ **RW momentum integrator** — tracks wheel angular momentum `h_W` (`builders/build_dynamics.m`)
+
+### Infrastructure
+- ✅ **To Workspace logging** — `q_log`, `omega_log`, `h_W_log` as Timeseries (`build_adcs_model.m`)
+- ✅ **Simulation timing from init script** — solver fixed step and stop time use `dt` and `t_end` from `init_adcs_params.m` (`build_adcs_model.m`)
+- ✅ **Rebuild-safe model generation** — `build_adcs_model.m` deletes stale generated `adcs_sim.slx` / `adcs_sim.slxc` artifacts and saves back to the repository root before each rebuild, avoiding same-name Simulink model collisions
+- ✅ **MATLAB smoke tests** — automated build + short-run regression script in `tests/run_adcs_tests.m`, executed successfully in MATLAB R2026a
+- ✅ **Math regression checks for inertia and frame conventions** — `tests/run_adcs_tests.m` now verifies the geometry-derived default inertia and enforces agreement between the live gravity-gradient and sensor ECI→body DCM conventions before simulation
+- ✅ **Repository push hygiene** — root `.gitignore` now excludes MATLAB/Simulink caches, autosaves, handbook build auxiliaries, and local visual-reference captures; a plaintext secret scan of the active source tree found no matches during the 2026-04-23 audit
+- ✅ **sim-finch structure integration** — added a root `README.md`, minimal `adcs-sim.prj`, and a derived `sim_config` compatibility hierarchy without splitting parameter truth away from `init_adcs_params.m`
+- ✅ **Interactive GUI dashboard** — `launch_adcs_gui.m` lets users override core inputs, run the standard init/build/sim flow, and visualize plots plus summary tables
+- ✅ **Quantified post-simulation metrics** — `simulate_adcs_case.m` and `summarize_adcs_simulation.m` derive attitude, rate, momentum, energy, and utilization metrics from the logged outputs
+- ✅ **Web GUI defaults sync alignment** — browser fallback spacecraft values now match the active 4 kg, `0.10 x 0.10 x 0.30 m` MATLAB baseline, and the sync script recognizes the current `orbit_*` names from `init_adcs_params.m` with SI-to-kilometer conversion
+- ✅ **Web GUI operation and orbit readability pass** — browser detumble now exposes decaying-rate progress, pointing modes report live operation progress, and the Three.js scene uses documented visual-only altitude exaggeration plus clearance checks so default LEO orbit geometry remains readable
 
 ---
 
-## Incomplete / Needs Work (🔲)
+## Open / Pending (🔲)
 
-### Actuators
-- 🔲 **CMG model** — currently outputs zero torque (placeholder). Needs gimbal dynamics: τ = dH/dt (`build_adcs_model.m`, actuators subsystem)
-- 🔲 **MTQ Assembly B-field input** — uses hardcoded `B_body = [2e-5; -1e-5; 4e-5]`. Should receive actual `B_body_meas` from SENSORS via an additional inport (`build_adcs_model.m`, actuators subsystem)
-
-### Sensors
-- 🔲 **Star tracker Earth-limb exclusion** — parameter `st_exclusion_earth = 25°` is defined in `init_adcs_params.m` but not implemented in the sensor MATLAB Function block (`build_adcs_model.m`, sensors subsystem)
-- 🔲 **Sample-and-hold for sensors** — sample rates defined (FSS 10 Hz, ST 2 Hz, IMU 100 Hz, MAG 10 Hz, GNSS 1 Hz) in `init_adcs_params.m` but no zero-order hold or discrete sample logic is applied; all sensors run at simulation rate (`build_adcs_model.m`)
-
-### Environment / Orbit
-- 🔲 **J2 orbital perturbation** — orbit propagator is pure Keplerian. J2 secular effects (RAAN drift, argument-of-perigee drift) are significant for LEO accuracy over multiple orbits (`build_adcs_model.m`, environment subsystem)
-- 🔲 **Orbit elements from init_adcs_params** — orbit propagator has hardcoded orbital elements instead of reading from workspace parameters set in `init_adcs_params.m` (`build_adcs_model.m`)
-
-### Environmental Torques
-- 🔲 **Gravity gradient torque** — not modeled. Significant for CubeSats; torque ≈ 3μ/R³ (I_z − I_x) (`build_adcs_model.m`, dynamics subsystem)
-- 🔲 **Aerodynamic drag torque** — relevant at ~500 km altitude but not modeled (`build_adcs_model.m`)
-- 🔲 **Solar radiation pressure torque** — not modeled; depends on surface area and reflectivity (`build_adcs_model.m`)
-- 🔲 **Residual magnetic dipole torque** — not modeled; τ = m_residual × B (`build_adcs_model.m`)
-
-### Control / Estimation
-- 🔲 **Extended Kalman Filter (EKF)** — TRIAD is a batch estimator. A Multiplicative EKF (MEKF) would give better filtering and gyro-bias estimation (`build_adcs_model.m`, control subsystem)
-- 🔲 **Mode manager / flight state machine** — no detumble → coarse-pointing → fine-pointing mode transitions; controller is always active (`build_adcs_model.m`, control subsystem)
-- 🔲 **Momentum desaturation** — no logic to dump accumulated RW momentum using magnetorquers (`build_adcs_model.m`, control subsystem)
-- 🔲 **Attitude reference generation** — target is always identity quaternion [0;0;0;1]. Need nadir-pointing, Sun-pointing, and other reference profiles (`build_adcs_model.m`, control subsystem)
-
-### Reaction Wheels
-- 🔲 **Reaction wheel momentum tracking** — saturation is applied per-torque only; no wheel momentum accumulation or speed tracking for desaturation triggers (`build_adcs_model.m`, actuators subsystem)
-
-### Infrastructure
-- 🔲 **Logging / telemetry** — only `Attitude_Scope` and `Rates_Scope` exist. Need `To Workspace` blocks or structured data logging (`build_adcs_model.m`)
-- 🔲 **Unit tests** — no automated test scripts for model validation
-- 🔲 **Integration with sim-finch branch** — `sim-finch` branch has good project structure (README, `.prj`, `sim_config` hierarchy) that should be merged into `simulink` branch
+- 🔲 **Run 100+ simulation cases** — execute more than 100 simulations across different parameter dispersions and mission scenarios, then summarize trends, sensitivities, and failure cases
+- 🔲 **Compare simulator results to other tools** — benchmark outputs against external analysis/simulation tools and record agreement gaps or model discrepancies
+- 🔲 **Expand GUI functionality** — add richer controls, workflows, and result-inspection features beyond the current dashboard
+- 🔲 **Verify implemented math against online research** — cross-check ADCS equations and assumptions against reputable external references and document any discrepancies
 
 ---
 
 ## Future / Nice-to-Have (📋)
 
+- 📋 **Restore high-fidelity environment models** — reintroduce J2 orbit propagation, magnetic field variation, and eclipse geometry with MATLAB Function implementations that pass parser and sample-time constraints
+- 📋 **Restore sampled/noisy sensor models** — reintroduce FSS, star tracker, IMU, magnetometer, and GNSS fidelity using discrete sample-time blocks or other compile-stable implementations
+- 📋 **Restore advanced control/actuator logic** — reintroduce onboard ephemeris, MEKF, reference generation, mode logic, PD/B-dot/desaturation control, and nonzero actuator models with compile-stable implementations
+- 📋 **Restore environmental disturbance models** — reintroduce drag, SRP, residual magnetic torque, and quaternion continuity logic without continuous-time persistent-state violations
+- 📋 **Expanded GUI / dashboard** — advanced parameter entry, real-time 3D visualization, and richer telemetry panes beyond the current basic dashboard
 - 📋 **Higher-fidelity magnetic field** — full IGRF spherical harmonic expansion instead of tilted dipole
 - 📋 **Atmospheric density model** — NRLMSISE-00 or JB2008 for drag computation
+- 📋 **Expanded regression coverage** — disturbance-specific tests, longer closed-loop cases, and Monte Carlo validation beyond the current smoke test
 - 📋 **Ground station contact windows** — visibility analysis for downlink scheduling
 - 📋 **Power / thermal coupling** — battery state-of-charge and thermal effects on actuator performance
 - 📋 **Monte Carlo simulation framework** — parameter dispersion and sensitivity analysis
 - 📋 **Code generation for flight software** — MATLAB Coder / Simulink Coder for embedded deployment
 - 📋 **CI/CD pipeline** — automated model build, test, and regression via GitHub Actions
+## Web ADCS GUI Follow-ups
+
+- Replace fallback/default parsed values with a stricter export from MATLAB once the desired web data contract is settled.
+- Add import support for `simulate_adcs_case.m` or `summarize_adcs_simulation.m` logged outputs so the web GUI can replay actual Simulink runs instead of only interactive browser-side propagation.
+- Compare browser Hohmann/J2 propagation against a MATLAB-generated reference case after shell/MATLAB validation is available.
+- Continue finer visual tuning against `.codex-video-reference/contact-sheet.jpg`, focusing on side-panel density, lighting polish, richer mission overlays, and ambient mode.
+- Consider adding sensor-specific overlays for sun sensor FOV, star tracker keep-out zones, magnetometer vectors, reaction wheel momentum, and magnetorquer dipole commands.
+## Post-Restart Validation Checklist
+
+- Done 2026-04-23: Confirmed shell access works inside the Codex runner with `Get-Location` and `cmd /c cd`.
+- Done 2026-04-23: From `web-adcs-gui/`, ran `npm install`.
+- Done 2026-04-23: Ran `npm run build`; fixed missing Three.js type declarations.
+- Done 2026-04-23: Ran `npm run test`; fixed Vitest collection and near-circular orbit radius assumptions.
+- Done 2026-04-23: Ran `npm run test:e2e`; installed the Playwright Chromium runtime and fixed the synced eccentricity form-step validation bug.
+- Done 2026-04-23: Extracted key frames from a local reference recording into an ignored visual-reference directory.
+- Done 2026-04-23: Reviewed the extracted contact sheet against the WebGL scene; remaining visual matching is tracked as a follow-up rather than a validation blocker.
+- Done 2026-04-23: Re-ran `npm run validate`; build, Vitest, and Playwright all passed.

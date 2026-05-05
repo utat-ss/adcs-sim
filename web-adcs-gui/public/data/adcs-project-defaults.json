@@ -1,0 +1,36 @@
+{
+  "source": "Synced from init_adcs_params.m and ephemeris_2026_weekly.csv",
+  "notes": [
+    "The data sync script updates this file from the MATLAB workspace parameters before dev/build.",
+    "The bundled values mirror the documented 4 kg 3U baseline and geometry-derived inertia convention."
+  ],
+  "spacecraft": {
+    "massKg": 4,
+    "dimensionsM": [
+      0.1,
+      0.1,
+      0.3
+    ],
+    "inertiaKgM2": [
+      0.033333,
+      0.033333,
+      0.006667
+    ],
+    "solarPanelAreaM2": 0.19,
+    "solarPanelEfficiency": 0.29,
+    "cameraHalfAngleDeg": 8
+  },
+  "orbit": {
+    "startAltitudeKm": 500,
+    "endAltitudeKm": 650,
+    "eccentricity": 0.0001,
+    "inclinationDeg": 51.6,
+    "raanDeg": 0,
+    "argPerigeeDeg": 0,
+    "trueAnomalyDeg": 0
+  },
+  "target": {
+    "latDeg": 34.7,
+    "lonDeg": -86.6
+  }
+}
