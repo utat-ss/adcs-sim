@@ -1,0 +1,35 @@
+# MATLAB / Simulink generated artifacts
+slprj/
+**/slprj/
+*.slxc
+*_autosave.slx
+*.autosave
+*.asv
+*.m~
+*.prj.PartialSave
+
+# Local archival/reference material
+.tmp_external_ref/
+
+# Local video/reference captures used for visual QA
+.codex-video-reference/
+*.mp4
+
+# Documentation build intermediates
+docs/*.aux
+docs/*.log
+docs/*.out
+docs/*.toc
+
+# Browser generated artifacts if the web GUI branch is checked out
+web-adcs-gui/node_modules/
+web-adcs-gui/dist/
+web-adcs-gui/coverage/
+web-adcs-gui/playwright-report/
+web-adcs-gui/test-results/
+web-adcs-gui/*.log
+web-adcs-gui/*.tsbuildinfo
+
+# OS clutter
+Thumbs.db
+.DS_Store

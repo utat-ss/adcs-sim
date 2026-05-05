@@ -10,168 +10,43 @@
 
 | File / Directory | Description |
 |---|---|
-| `build_adcs_model.m` | **Start here.** ~66 KB MATLAB script that programmatically constructs the entire Simulink model (`adcs_sim.slx`). Every block, port, signal, and parameter is defined in this file. |
+| `build_adcs_model.m` | **Start here.** Slim orchestrator (~175 lines) that creates the Simulink model, calls builders, wires top-level signals, and saves. |
+| `launch_adcs_gui.m` | Interactive dashboard entrypoint for running the simulator and visualizing derived results. |
+| `simulate_adcs_case.m` | Scriptable init/build/sim wrapper with optional parameter overrides. |
+| `summarize_adcs_simulation.m` | Post-processing helper that turns logged signals into quantitative behavior metrics. |
+| `builders/` | Subsystem builder functions — one file per subsystem. Each contains the builder + all embedded code generators. |
+| `builders/build_environment.m` | ENVIRONMENT subsystem: Ephemeris_Truth, Orbit_Propagator, Magnetic_Field_Model, Eclipse_Model |
+| `builders/build_sensors.m` | SENSORS subsystem: Sun_Sensor_Suite, Star_Tracker, IMU, Magnetometer, GNSS |
+| `builders/build_control.m` | CONTROL subsystem: Onboard_Ephemeris, Attitude_Estimator, Reference_Generator, Mode_Manager, Control_Law |
+| `builders/build_actuators.m` | ACTUATORS subsystem: RW_Assembly, MTQ_Assembly, CMG |
+| `builders/build_dynamics.m` | DYNAMICS subsystem: Euler_RHS, Gravity_Gradient, Aero_Drag_Torque, SRP_Torque, Residual_Mag_Torque, Quat_RHS, Quat_Norm, Integrators |
+| `utils/` | Shared helper functions used by all builders. |
+| `utils/csub.m` | Clear default In1→Out1 wiring in fresh subsystems |
+| `utils/add_inports.m` | Add a column of Inport blocks |
+| `utils/add_outports.m` | Add a column of Outport blocks |
+| `utils/set_mfb_script.m` | Set embedded MATLAB code in MATLAB Function blocks |
+| `utils/leaf.m` | Create stub subsystem with named ports |
+| `tests/run_adcs_tests.m` | MATLAB regression entrypoint that rebuilds the model, runs a short simulation, and checks logged outputs. |
 | `init_adcs_params.m` | Parameter initialization script. Defines spacecraft properties, orbital elements, sensor noise levels, actuator limits, and simulation settings. **Must be run before simulation.** |
+| `sim_config.m` | Structured compatibility entrypoint that derives grouped config data from `init_adcs_params.m`. |
+| `sim_config/` | Compatibility config hierarchy carried over from `sim-finch`, now populated with derived spacecraft/sensor/actuator catalog scripts. |
+| `adcs-sim.prj` | Minimal MATLAB project entrypoint for opening the repo as a MATLAB project. |
+| `README.md` | Human-facing quick-start and repository overview. |
+| `logs.md` | Repository change log for notable recent updates. |
 | `adcs_sim.slx` | Simulink model binary — generated output of `build_adcs_model.m`. Do not hand-edit; regenerate by running the build script. |
 | `ephemeris_2026_weekly.csv` | Sun and Moon direction vectors in ECI for 2026 (53 weekly data points). Consumed by the `Ephemeris_Truth` subsystem via CSV interpolation. |
 | `LICENSE` | MIT license. |
 | `resources/` | Simulink project resources (contains `project/` subdirectory). |
-| `sim_config/` | Empty on this branch. Used on the `sim-finch` branch for configuration infrastructure. |
 
 ---
 
-## 2. Model Architecture Map
+## 2. Detailed Reference
 
-The Simulink model follows a **feedforward + feedback** architecture:
-
-```
-ENVIRONMENT → SENSORS → CONTROL → ACTUATORS → DYNAMICS
-                 ↑                                 │
-                 └──────── feedback ───────────────┘
-```
-
-### Subsystem Lookup Table
-
-| If you need to work on… | Look in subsystem… | Key outputs |
-|---|---|---|
-| Sun/Moon positions | `ENVIRONMENT/Ephemeris_Truth` | `Sun_vec_ECI`, `Moon_vec_ECI` |
-| Orbit propagation | `ENVIRONMENT/Orbit_Propagator` | `pos_ECI`, `vel_ECI` |
-| Magnetic field | `ENVIRONMENT/Magnetic_Field_Model` | `B_ECI` |
-| Eclipse detection | `ENVIRONMENT/Eclipse_Model` | `eclipse_flag` |
-| Sun sensors | `SENSORS/Sun_Sensor_Suite` | `sun_meas` (6 fine sun sensors) |
-| Star tracker | `SENSORS/Star_Tracker` | `q_meas` (quaternion measurement) |
-| Gyroscope / IMU | `SENSORS/IMU` | `omega_meas` |
-| Magnetometer | `SENSORS/Magnetometer` | `B_body_meas` |
-| GPS | `SENSORS/GNSS` | `pos_meas`, `vel_meas` |
-| Onboard ephemeris prediction | `CONTROL/Onboard_Ephemeris` | `Sun_predicted`, `Mag_predicted` |
-| Attitude estimation | `CONTROL/Attitude_Estimator` | `q_est`, `omega_est` (TRIAD) |
-| Control torque commands | `CONTROL/Control_Law` | `rw_torque_cmd`, `mtq_dipole_cmd`, `cmg_gimbal_cmd` (PD + B-dot) |
-| Reaction wheels | `ACTUATORS/RW_Assembly` | `torque` (4-wheel pyramid, pseudoinverse) |
-| Magnetorquers | `ACTUATORS/MTQ_Assembly` | `torque` (3 rods, dipole saturation) |
-| CMG | `ACTUATORS/CMG` | Zero torque (placeholder) |
-| Torque summation | `ACTUATORS/Torque_Sum` | Total actuator torque |
-| Rotational dynamics | `DYNAMICS/Euler_RHS` | `omega_dot` (Euler's equation) |
-| Quaternion kinematics | `DYNAMICS/Quat_RHS` | `q_dot` |
-| Angular velocity integration | `DYNAMICS/Integ_omega` | `omega` (IC = `omega0`) |
-| Quaternion integration | `DYNAMICS/Integ_q` | `q` (IC = `q0`) |
-| Quaternion normalization | `DYNAMICS/Quat_Norm` | `q_out` |
-| Attitude plots | `Attitude_Scope` | — |
-| Rate plots | `Rates_Scope` | — |
+For model architecture map, full model hierarchy, signal/port mappings, and parameter tables, see **[`reference.md`](reference.md)**.
 
 ---
 
-## 3. Full Model Hierarchy
-
-```
-adcs_sim  (TOP LEVEL)
-├── ENVIRONMENT
-│   ├── Ephemeris_Truth         → Sun_vec_ECI, Moon_vec_ECI  (CSV interpolation)
-│   ├── Orbit_Propagator        → pos_ECI, vel_ECI           (Keplerian 2-body)
-│   ├── Magnetic_Field_Model    → B_ECI                      (tilted dipole IGRF approx)
-│   └── Eclipse_Model           → eclipse_flag                (cylindrical shadow)
-│
-├── SENSORS
-│   ├── Sun_Sensor_Suite (6 FSS) → sun_meas       (FOV check + noise)
-│   ├── Star_Tracker             → q_meas         (Sun/Moon exclusion + noise)
-│   ├── IMU                      → omega_meas     (bias drift + ARW)
-│   ├── Magnetometer             → B_body_meas    (hard-iron bias + noise)
-│   └── GNSS                     → pos_meas, vel_meas  (white noise)
-│
-├── CONTROL
-│   ├── Onboard_Ephemeris       → Sun_predicted, Mag_predicted  (Meeus model)
-│   ├── Attitude_Estimator      → q_est, omega_est              (TRIAD method)
-│   └── Control_Law             → rw_torque_cmd, mtq_dipole_cmd, cmg_gimbal_cmd  (PD + B-dot)
-│
-├── ACTUATORS
-│   ├── RW_Assembly (4 wheels)   → torque  (pyramid config, pseudoinverse distribution)
-│   ├── MTQ_Assembly (3 rods)    → torque  (dipole saturation, τ = m × B)
-│   ├── CMG (placeholder)        → zero torque
-│   └── Torque_Sum
-│
-├── DYNAMICS
-│   ├── Euler_RHS               → omega_dot  (Euler's equation)
-│   ├── Quat_RHS                → q_dot      (quaternion kinematics)
-│   ├── Integ_omega             → omega       (integrator, IC = omega0)
-│   ├── Integ_q                 → q           (integrator, IC = q0)
-│   └── Quat_Norm               → q_out       (renormalization)
-│
-├── Attitude_Scope
-└── Rates_Scope
-```
-
----
-
-## 4. Signal / Port Mapping Reference
-
-### Signal Flow (top level)
-
-| From | To | Signals |
-|---|---|---|
-| `ENVIRONMENT` | `SENSORS` | `Sun_vec_ECI`, `Moon_vec_ECI`, `pos_ECI`, `vel_ECI`, `B_ECI`, `eclipse_flag` |
-| `SENSORS` | `CONTROL` | `sun_meas`, `q_meas`, `omega_meas`, `B_body_meas`, `pos_meas`, `vel_meas` |
-| `CONTROL` | `ACTUATORS` | `rw_torque_cmd`, `mtq_dipole_cmd`, `cmg_gimbal_cmd` |
-| `ACTUATORS` | `DYNAMICS` | Total actuator torque (summed) |
-| `DYNAMICS` | `SENSORS` | **Feedback:** `q_out` (attitude quaternion), `omega` (angular velocity) |
-
-### Feedback Connections
-
-| Signal | Source | Destination | Purpose |
-|---|---|---|---|
-| `q_out` | `DYNAMICS/Quat_Norm` | `SENSORS` (q_in) | True attitude for sensor models |
-| `omega` | `DYNAMICS/Integ_omega` | `SENSORS` (omega_in) | True angular velocity for sensor models |
-
----
-
-## 5. Parameter Quick-Reference
-
-All parameters are defined in **`init_adcs_params.m`**. Key values:
-
-### Spacecraft
-
-| Parameter | Value | Notes |
-|---|---|---|
-| Form factor | 3U CubeSat | — |
-| Mass | 4 kg | — |
-| Inertia tensor `J` | `diag([0.05, 0.05, 0.08])` kg·m² | Principal axes |
-
-### Orbit
-
-| Parameter | Value | Notes |
-|---|---|---|
-| Altitude | 500 km | ISS-like |
-| Inclination | 51.6° | ISS-like |
-| Eccentricity | ~0 (near-circular) | — |
-
-### Sensors
-
-| Sensor | Key Noise Parameter |
-|---|---|
-| Fine Sun Sensors (×6) | 0.5° noise |
-| Star Tracker | 10 arcsec (boresight) / 40 arcsec (cross-axis) |
-| IMU | 0.01 deg/√s ARW |
-| Magnetometer | 100 nT noise |
-| GNSS | 10 m position noise |
-
-### Actuators
-
-| Actuator | Spec |
-|---|---|
-| Reaction Wheels (×4) | 5 mN·m max torque, pyramid config |
-| Magnetorquers (×3) | 0.2 A·m² max dipole |
-| CMG (×1) | Placeholder (outputs zero) |
-
-### Simulation
-
-| Parameter | Value |
-|---|---|
-| Time step `dt` | 0.1 s |
-| Duration `t_end` | 6000 s (~1 orbit) |
-| Solver | `ode4` (fixed-step Runge-Kutta) |
-| Quaternion convention | Scalar-first `[q0, q1, q2, q3]` |
-
----
-
-## 6. Branch Overview
+## 3. Branch Overview
 
 | Branch | Purpose |
 |---|---|
@@ -184,7 +59,7 @@ All parameters are defined in **`init_adcs_params.m`**. Key values:
 
 ---
 
-## 7. How to Run the Simulation
+## 4. How to Run the Simulation
 
 ### Prerequisites
 - MATLAB R2023b or later (with Simulink)
@@ -215,31 +90,105 @@ sim('adcs_sim')
 init_adcs_params; build_adcs_model; sim('adcs_sim');
 ```
 
+### Interactive dashboard
+
+```matlab
+launch_adcs_gui
+```
+
 ---
 
-## 8. Conventions & Notes for AI Agents
+## 5. Conventions & Notes for AI Agents
 
-- **Do not edit `adcs_sim.slx` directly.** It is a generated binary. All model changes should be made in `build_adcs_model.m`.
+- **Do not edit `adcs_sim.slx` directly.** It is a generated binary. All model changes should be made in the builder files or the orchestrator.
 - **Quaternion convention is scalar-first** `[q0, q1, q2, q3]` throughout the codebase.
-- **The build script (`build_adcs_model.m`) is the single source of truth** for model structure — block names, positions, port connections, gain values, and MATLAB Function blocks are all defined there.
+- **The default inertia tensor is geometry-derived.** `init_adcs_params.m` computes `J` from `mass_sc` and `sc_dim_*` as the uniform-density baseline for the declared 4 kg, 3U bus. If a different inertia model is introduced, document where it came from.
+- **The orchestrator (`build_adcs_model.m`) + builders (`builders/`) are the source of truth** for model structure — block names, positions, port connections, gain values, and MATLAB Function blocks.
+- **To modify a subsystem,** edit the corresponding file in `builders/`. Shared helpers live in `utils/`. Top-level wiring lives in `build_adcs_model.m`.
 - **Parameters flow from `init_adcs_params.m` → MATLAB base workspace → Simulink model.** If a simulation fails with "undefined variable" errors, run `init_adcs_params` first.
+- **`sim_config.m` and the `sim_config/` hierarchy are compatibility views, not independent parameter sources.** Keep them derived from `init_adcs_params.m` so configuration data does not drift from the model.
+- **MATLAB Function blocks that use `persistent` state cannot run at continuous sample time.** If MATLAB reports this error, either give the block a discrete sample time or remove the persistent-state logic.
 - **Ephemeris data** is loaded from `ephemeris_2026_weekly.csv` at simulation start. The CSV has 53 rows (weekly intervals for 2026).
+- **Push hygiene matters.** Keep MATLAB/Simulink cache outputs such as `slprj/`, `*.slxc`, autosave files, and documentation build auxiliaries like `docs/*.aux`, `docs/*.log`, `docs/*.out`, and `docs/*.toc` out of Git; they are local/generated artifacts rather than source inputs.
+- **No plaintext secrets were found in the active source tree during the 2026-04-23 push-readiness audit.** Re-run a text search for keys/tokens before future pushes if new config, workflow, or integration files are added.
+- **Always generate a concise summary of what changed after completing work.** Include major code changes, documentation updates, validation performed, and any unresolved issues.
+- **Document as you go.** Any new knowledge, conventions, physics, or lessons learned must be written to the appropriate markdown file automatically:
+  - **`agents.md`** — workflow rules, conventions, agent instructions
+  - **`reference.md`** — architecture, port mappings, signal flow, parameter tables
+  - **`skills.md`** — physics, math, domain knowledge, equations
+  - **`logs.md`** — notable repository changes and recent updates
+  - **`todo.md`** — task tracking, future work items
 
 ---
 
-## 9. Agent Workflow — Plan Then Execute
+## 6. ⛔ NEVER Commit or Push to GitHub
 
-When the user asks you to perform a task, **always follow this two-phase workflow**:
+**This is a hard rule — no exceptions.**
 
-### Phase 1: Plan (Claude Opus 4.6 — high thinking)
-- Use model **`claude-opus-4.6`** with high thinking to create a detailed implementation plan.
+- Do **not** run `git add`, `git commit`, `git push`, `git merge`, or any other git write operation.
+- All git operations are the user's responsibility. If you think something should be committed, tell the user and let them do it.
+- This applies to all models, agents, and sub-agents — including background tasks.
+
+---
+
+## 7. Agent Workflow — GPT-5.5 Only
+
+When the user asks you to perform a task that involves codebase changes, **use GPT-5.5 for the entire workflow**:
+
+### Single-Model Workflow
+- Use model **`gpt-5.5`** for planning, research, implementation, and verification.
 - Analyze the codebase, identify affected files, consider edge cases, and validate assumptions against `skills.md`.
-- Write the plan to `plan.md` in the session workspace or present it to the user for review.
-- Do **not** make code changes during this phase.
+- Write or update `plan.md` in the session workspace when a detailed plan is useful.
+- Implement changes directly once the task is clear.
+- Run any applicable validation after changes are made.
 
-### Phase 2: Execute (GPT-5.3-Codex — high thinking)
-- Switch to model **`gpt-5.3-codex`** with high thinking to implement the plan.
-- Follow the plan step-by-step, making precise code changes.
-- Run any applicable tests or validation after changes are made.
+> **Rationale:** Use one model consistently for planning and execution to simplify the workflow and avoid unsupported-model issues.
 
-> **Rationale:** Opus 4.6 excels at reasoning, architecture, and planning. Codex 5.3 excels at fast, accurate code generation and execution. Separating the phases plays to each model's strengths.
+---
+
+## 8. How to Launch a Background Agent
+
+Use the **`task` tool** when a separate context window is useful, but keep the model on **`gpt-5.5`**.
+
+### Steps
+
+1. **Finish planning** in the current conversation. Write a comprehensive prompt that includes all context the agent will need — it runs in a separate, stateless context window.
+
+2. **Launch the agent** using the `task` tool:
+   ```
+   tool: task
+   agent_type: general-purpose
+   model: gpt-5.5              ← use the same model
+   mode: background             ← runs async, you get notified on completion
+   name: descriptive-name
+   prompt: <full task description with all file paths, code context, and instructions>
+   ```
+
+3. **Wait for completion notification.** Continue other work in the meantime.
+
+4. **Read results** with `read_agent(agent_id)` once notified.
+
+5. **Verify the output** — review changed files, run tests if applicable.
+
+### Key Notes
+
+- The background agent is **stateless** — it cannot see your conversation history. Include everything it needs in the prompt: file paths, current code snippets, exact instructions, constraints (like "do not commit").
+- **To verify which model ran**, include this line in the prompt: *"State which model you are (model name and ID) at the very start of your response."* The agent will self-identify, giving you confirmation in the output.
+- Use **`gpt-5.5`** for background agents as well unless the user explicitly asks for something else.
+- Use `mode: background` for long tasks so you can work in parallel.
+- Use `mode: sync` only for quick tasks where you need the result immediately.
+- Multiple `explore` agents can run in parallel; `general-purpose` and `task` agents should run one at a time (they have side effects).
+
+### When to Parallelize vs. Serialize
+
+**Parallelize** (multiple background agents at once) when:
+- Changes target **different files** (e.g., new plotting script + new utility function)
+- Tasks are **research/exploration** (e.g., "analyze 5 subsystems" → 5 explore agents)
+- Tasks are **independent validations** (e.g., run different test suites)
+
+**Serialize** (one agent at a time) when:
+- Multiple changes target the **same file** — parallel agents will overwrite each other
+- Changes have **dependencies** (e.g., task B needs the output of task A)
+- Changes are **structurally coupled** (e.g., modifying a function signature requires updating all callers)
+
+> **Example — this project:** After refactoring, each subsystem is in its own file (`builders/build_*.m`). Improvements to different subsystems (e.g., sensors + actuators + dynamics) can now be parallelized across separate background agents. Only changes to the same builder file must be serialized.

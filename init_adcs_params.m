@@ -11,11 +11,34 @@
 %  SPACECRAFT PARAMETERS
 %  ════════════════════════════════════════════════════════════════════════
 
-% Inertia tensor  [kg·m²]  (approximate 3U CubeSat)
-J = diag([0.05, 0.05, 0.08]);
-
 % Mass [kg]
 mass_sc = 4.0;
+
+% 3U CubeSat outer dimensions  [m]
+sc_dim_x = 0.10;
+sc_dim_y = 0.10;
+sc_dim_z = 0.30;
+
+% Inertia tensor  [kg·m²]
+% Use the uniform-density cuboid baseline implied by the declared bus mass
+% and outer dimensions so the default rigid-body dynamics remain
+% self-consistent with the rest of the parameter set.
+J = diag((mass_sc / 12) * [ ...
+    sc_dim_y^2 + sc_dim_z^2, ...
+    sc_dim_x^2 + sc_dim_z^2, ...
+    sc_dim_x^2 + sc_dim_y^2]);
+
+% Panel geometry used by environmental torque models
+% Columns correspond to +X, -X, +Y, -Y, +Z, -Z faces.
+sc_face_normals = [ 1, -1,  0,  0,  0,  0;
+                    0,  0,  1, -1,  0,  0;
+                    0,  0,  0,  0,  1, -1 ];
+sc_face_areas = [sc_dim_y*sc_dim_z, sc_dim_y*sc_dim_z, ...
+                 sc_dim_x*sc_dim_z, sc_dim_x*sc_dim_z, ...
+                 sc_dim_x*sc_dim_y, sc_dim_x*sc_dim_y];
+sc_face_cop = [ sc_dim_x/2, -sc_dim_x/2,  0,          0,          0,          0;
+                0,           0,           sc_dim_y/2, -sc_dim_y/2, 0,          0;
+                0,           0,           0,          0,          sc_dim_z/2, -sc_dim_z/2 ];
 
 %% ════════════════════════════════════════════════════════════════════════
 %  INITIAL CONDITIONS
@@ -27,11 +50,14 @@ q0 = [1; 0; 0; 0];
 % Body angular velocity  [rad/s]
 omega0 = [0.01; -0.005; 0.02];
 
+% Reaction wheel momentum state  [N·m·s]
+h_W0 = [0; 0; 0; 0];
+
 %% ════════════════════════════════════════════════════════════════════════
 %  SIMULATION
 %  ════════════════════════════════════════════════════════════════════════
 
-dt    = 0.1;       % Fixed integration step  [s]
+dt    = 0.01;      % Fixed integration step  [s]  (matches fastest sensor rate)
 t_end = 6000;      % Duration  [s]  (~100 min, ≈ 1 orbit)
 
 %% ════════════════════════════════════════════════════════════════════════
@@ -62,6 +88,8 @@ fprintf('done  (%d data points, %.0f days span)\n', ...
 
 R_earth  = 6371e3;            % Earth mean radius  [m]
 mu_earth = 3.986004418e14;    % Gravitational parameter  [m³/s²]
+J2_earth = 1.08262668e-3;     % Earth second zonal harmonic  [-]
+omega_earth = [0; 0; 7.2921150e-5];  % Earth rotation rate  [rad/s]
 
 orbit_alt  = 500e3;           % Altitude above surface  [m]
 orbit_inc  = 51.6;            % Inclination  [deg]
@@ -147,6 +175,19 @@ cmg_momentum     = 0.5;       % Rotor angular momentum  [N·m·s]
 cmg_gimbal_rate  = 1.0;       % Max gimbal rate  [rad/s]
 
 %% ════════════════════════════════════════════════════════════════════════
+%  CONTROL / MODE MANAGEMENT
+%  ════════════════════════════════════════════════════════════════════════
+
+ctrl_rw_kp              = 0.01;          % RW proportional gain
+ctrl_rw_kd              = 0.05;          % RW derivative gain
+ctrl_bdot_gain          = 5e4;           % B-dot detumble gain
+ctrl_dump_gain          = 0.02;          % MTQ momentum-dump gain
+ctrl_unload_fraction    = 0.60;          % Start unloading above this fraction of max RW momentum
+mode_detumble_rate      = 0.5*pi/180;    % Enter/hold detumble above this rate  [rad/s]
+mode_fine_rate          = 0.1*pi/180;    % Fine-pointing max rate threshold  [rad/s]
+mode_fine_err           = 10*pi/180;     % Fine-pointing max attitude error  [rad]
+
+%% ════════════════════════════════════════════════════════════════════════
 %  ENVIRONMENT / REFERENCE CONSTANTS
 %  ════════════════════════════════════════════════════════════════════════
 
@@ -158,6 +199,22 @@ B0_earth = 3.12e-5;           % Dipole field at equator  [T]
 
 % Solar flux at 1 AU
 solar_flux = 1361;            % [W/m²]
+speed_of_light = 299792458;   % [m/s]
+solar_pressure_1au = solar_flux / speed_of_light;   % [N/m²]
+
+% Environmental disturbance torque parameters
+atm_ref_alt      = 500e3;      % Reference altitude for exponential atmosphere  [m]
+atm_ref_density  = 6.967e-13;  % Typical mean density near 500 km  [kg/m³]
+atm_scale_height = 63.822e3;   % Exponential scale height near 500 km  [m]
+drag_coeff       = 2.3;        % Aerodynamic drag coefficient  [-]
+srp_coeff        = 1.3;        % Effective SRP reflectivity coefficient  [-]
+residual_dipole  = [5e-3; 5e-3; 5e-3];   % Residual magnetic dipole  [A·m²]
+
+% Navigation filter parameters
+mekf_sigma_g   = imu_arw * pi/180;                  % Gyro white-noise proxy  [rad/sqrt(s)]
+mekf_sigma_b   = imu_bias_instab * pi/180 / 3600;   % Gyro bias random-walk proxy  [rad/s]
+mekf_sun_sigma = fss_noise_sigma * pi/180;          % Sun vector angular noise  [rad]
+mekf_mag_sigma = max(mag_noise_sigma * 1e-9 / B0_earth, 1e-4);  % Normalized B-vector noise
 
 %% ════════════════════════════════════════════════════════════════════════
 %  PRINT SUMMARY
