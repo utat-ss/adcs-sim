@@ -1,42 +1,47 @@
 # ADCS Simulator & Controller Repo
 This repo is intended to house all code development of the UTAT-SS in-house attitude and flight dynamics simulator & controller.
 
-# Development Environment
-Simulator & controller software is developed primarily using MATLAB & Simulink. The recommended version is R2025b.
+## Development Environment
+Simulator & controller software is developed primarily using Python 3.12.12.
 
-Secondary development may be done using Python. **IMPORTANT**: Python shall not be used for any flight software.
-## Packages
-Developers will require the following MATLAB/Simulink add-ons:
-- Aerospace Blockset
-## Flight Software
-In the event UTAT-SS decides to deploy in-house developed ADCS software, it should be derived from the code developed in this repo. This may be done using the MATLAB Coder add-on for direct conversion or it may be manually translated. Flight software will be subject to standard UTAT-SS coding & code review standards.
+**IMPORTANT**: Python shall not be used for any flight software. If the time comes in which custom code is used on flight, it must be converted to an appropriate system level language and must adhere to coding & review standards for flight code.
+### Python Project Management
+Python code will be managed using `uv`, documented here: https://docs.astral.sh/uv/guides/projects/
 
-# Repo Usage
-## Branching
-Pushing directly to `main` is discouraged. Please do all development on a secondary branch and only merge to `main` once the code has been reviewed.
+`uv` conveniently manages your virtual environment and makes sharing code simple. To get started, after cloning the repo you can simply run `uv sync` to download any required packaged to the virtual environment.
+
+You can run the simulator in the virtual environment using `uv run main.py`
+
+To add a package, simply `uv add <package>`.
+
+`uv` includes many other convenient features that you may find useful. You are encouraged to review the full documentation.
+
+## Repo Usage
+### Branching
+Pushing directly to `main` is discouraged. Please do all development on a secondary branch and only merge to `main` once the code has been reviewed and tested.
 
 Branches should be feature-specific. Developers are encouraged to favour creating more branches over packing single branches with large amounts of new code. This improves traceability, reviewability, and overall organization.
 
 Branch names should be short and provide some insight into what is being developed in that branch.
-## Commits
+### Commits
 Changes should be committed often, but ensure changes are non-breaking. For example, commit when a new function has been written and tested but prior to its integration with existing codepaths. Another commit can be pushed upon successful integration. Avoid committing large additions, deletions, or refactors all at once.
 
 Commit messages should be concise and informative. Developers are encouraged to use the following tags along with a brief description of the included work:
 - `ADD`: Adding a new feature, function, file, etc.
-- `CHG`: Changing a function signature or codepath.
+- `CHG`: Changing a function signature or code path.
 - `DEL`: Removing a feature, function, file, etc.
 - `FIX`: Fixing a known bug.
-If possible, it is preferrable to refer to a specific work ticket relating to the commit.
-## Merging to `main`
+If possible, it is preferable to refer to a specific work ticket relating to the commit.
+### Merging to `main`
 Currently, no CI/CD pipelines exist for automatic code testing. Developers are asked to adhere to the usage rules described herein. Code should only be merged when it has passed appropriate unit testing and has proven to integrate with existing code in `main` without breaking.
 
-# Code Standards
+## Code Standards
 All submitted code must be appropriately documented. Classes, systems, functions, and other callables must include docstrings providing a detailed description of the code's purpose, the name, type, and description of inputs, the name, type, and description of outputs, and any discretely defined errors.
 
-MATLAB code is often written in a math-like fashion, favouring simple variable names (e.g. `x` or `v` rather than `pos` or `vel`). This is acceptable for compactification of mathematically-heavy algorithms, but developers should include detailed comments throughout to improve readability.
+Control code is often written in a math-like fashion, favouring simple variable names (e.g. `x` or `v` rather than `pos` or `vel`). This is acceptable for compactification of mathematically-heavy algorithms, but developers should include detailed comments throughout to improve readability.
 
-# Simulator vs Controller
-To perform development of ADCS algorithms and software, it is necessary to have a "ground truth" to supply data to the estimation and control algorithms. This is the domain of the simulator, and it is generally most convenient to colocate the simulator in the same model as the controller.
+## Simulator vs Controller
+To perform development of ADCS algorithms and software, it is necessary to have a "ground truth" to supply data to the estimation and control algorithms. This is the domain of the simulator, and it is generally most convenient to co-locate the simulator in the same model as the controller.
 
 Simulator elements exist strictly to provide this "ground truth." It is important to understand the separation. Simulator elements make use of high-fidelity models to provide the most precise and accurate representation of reality as possible. It *must only* accept as an input the exact state of the system at any given time.
 
