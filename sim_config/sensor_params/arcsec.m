@@ -2,7 +2,8 @@
 sensor = struct(                                            ...
     'fov',          25.2,                                   ... % Field of view (full cone) [deg]
     'exclusion',    80,                                     ... % Exclusion zone (full cone) [deg]
-    'cov',          diag([0.0014^2, 0.0014^2, 0.0056^2])    ... % Simple covariance (yaw, pitch, roll) [deg^2]
+    'cov',          diag([0.0014^2, 0.0014^2, 0.0056^2]),   ... % Simple covariance (yaw, pitch, roll) [deg^2]
+    'rate',         2                                       ... % Data refresh rate [Hz]
     );
 [f_dir, ~, ~] = fileparts(mfilename('fullpath'));
 save_path = fullfile(f_dir, 'arcsec.mat');

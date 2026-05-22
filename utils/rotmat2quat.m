@@ -44,6 +44,8 @@ switch i
         qx = (C(2,3) - C(3,2) / (4 * qw));
         qy = (C(3,1) - C(1,3) / (4 * qw));
         qz = (C(1,2) + C(2,1) / (4 * qw));
+    otherwise
+        error('Invalid Direction Cosine Matrix');
 end
 
 q = [qx; qy; qz; qw];
