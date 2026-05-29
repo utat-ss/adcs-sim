@@ -16,7 +16,7 @@ class VirtualFSS:
         self.rate_hz: float = 0.0  # Data rate [Hz]
         self.cov_deg2: np.ndarray = np.zeros((2, 2), dtype=float)  # Measurement covariance (2x2) [deg^2]
         self._load_cfg(cfg_file)
-
+ 
     def _load_cfg(self, cfg_file: Path):
         """
         Populate FSS parameters using a configuration file.
