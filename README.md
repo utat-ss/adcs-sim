@@ -36,9 +36,17 @@ If possible, it is preferable to refer to a specific work ticket relating to the
 Currently, no CI/CD pipelines exist for automatic code testing. Developers are asked to adhere to the usage rules described herein. Code should only be merged when it has passed appropriate unit testing and has proven to integrate with existing code in `main` without breaking.
 
 ## Code Standards
+### Documentation
 All submitted code must be appropriately documented. Classes, systems, functions, and other callables must include docstrings providing a detailed description of the code's purpose, the name, type, and description of inputs, the name, type, and description of outputs, and any discretely defined errors.
 
+### Styling
+The Python PEP 8 style guide can be used as a starting reference for naming conventions. For example, functions and variables should be in snake_case while class names follow the CapWords convention. When in doubt, please review the standard here: https://peps.python.org/pep-0008/#class-names
+
 Control code is often written in a math-like fashion, favouring simple variable names (e.g. `x` or `v` rather than `pos` or `vel`). This is acceptable for compactification of mathematically-heavy algorithms, but developers should include detailed comments throughout to improve readability.
+
+Variables representing physical values (e.g. position, velocity, angle, temperature) should include units as practical in order to avoid confusion. Units should be appended to the variable name using snake case. Nominator units should be grouped together first, then denominator units grouped together after a separating underscore. For example, a force described in base SI units of kg*m/s^2 would be `f_kgm_s2`.
+
+With respect to testing: aim for complete code coverage. Using `pytest` as the test environment, you should generally be writing a unit test for any functions you produce and ensure those tests are passed before pushing.
 
 ## Simulator vs Controller
 To perform development of ADCS algorithms and software, it is necessary to have a "ground truth" to supply data to the estimation and control algorithms. This is the domain of the simulator, and it is generally most convenient to co-locate the simulator in the same model as the controller.
