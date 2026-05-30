@@ -197,18 +197,19 @@ class VirtualSTR:
         fov_rad: float
         exclusion_rad: float
         rate_hz: float
-        cov_rad: [float, float, float]
+        cov_diag: [float, float, float]
     """
 
     def __init__(self, cfg_file: Path):
+        self.type: str = "STR"
         self.model: str = "Generic STR"
         self.fov_rad: float = 0.0
         self.exclusion_rad: float = 0.0
         self.rate_hz: float = 0.0
 
-        # Diagonal measurement covariance for [roll, pitch, yaw] in rad^2
-        self.cov_rad: np.ndarray = np.array([0.0, 0.0, 0.0], dtype=float)
-
+        # Measurement covariance matrix for [roll, pitch, yaw] in rad^2
+        self.cov_rad2: np.ndarray = np.array([[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]], dtype=float)
+        self.cov_diag: np.array = np.array([0.0, 0.0, 0.0], dtype=float)
         self._load_cfg(cfg_file)
 
     def _load_cfg(self, cfg_file: Path):
@@ -227,7 +228,8 @@ class VirtualSTR:
         self.fov_rad = float(cfg["fov_rad"])
         self.exclusion_rad = float(cfg["exclusion_rad"])
         self.rate_hz = float(cfg["rate_hz"])
-        self.cov_rad = np.asarray(cfg["cov_rad"], dtype=float)
+        self.cov_rad2 = np.asarray(cfg["cov_rad2"], dtype=float)
+        self.cov_diag = np.diag(self.cov_rad2)
 
     @staticmethod
     def _normalize_quat(q: np.ndarray) -> np.ndarray:
@@ -304,7 +306,7 @@ class VirtualSTR:
         """
         q_true = self._normalize_quat(q_true)
 
-        sigma_rad = np.sqrt(self.cov_rad)
+        sigma_rad = np.sqrt(np.diag(self.cov_diag))
         noise_rad = np.random.normal(loc=0.0, scale=sigma_rad, size=3)
 
         dq = self._quat_from_rotvec(noise_rad)
