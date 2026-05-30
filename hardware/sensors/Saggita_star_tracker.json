@@ -1,0 +1,9 @@
+{
+  "model": "Sagitta Star Tracker",
+  "fov_deg": 25.2,
+  "exclusion_deg": 80.0,
+  "rate_hz": 10.0,
+  "cov_rad": [
+    5.47335253424e-7, 3.420845e-8, 3.420845e-8
+  ]
+}
