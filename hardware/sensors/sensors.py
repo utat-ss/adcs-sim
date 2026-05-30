@@ -4,17 +4,21 @@ from pathlib import Path
 import json
 import numpy as np
 
+
 class VirtualFSS:
     """
     Generic virtual Fine Sun Sensor model for use in simulation
     """
+
     def __init__(self, cfg_file: Path):
-        self.model: str = "Generic FSS"                         # Model name
-        self.fov_deg: float = 0.0                               # Half-cone field of view [deg]
-        self.rate_hz: float = 0.0                               # Data rate [Hz]
+        self.model: str = "Generic FSS"  # Model name
+        self.fov_deg: float = 0.0  # Half-cone field of view [deg]
+        self.rate_hz: float = 0.0  # Data rate [Hz]
         self.cov_deg2: np.ndarray = np.array([[0, 0], [0, 0]])  # Measurement covariance (2x2) [deg^2]
-        self.eclipse_flag: bool = False                         # True if spacecraft is in eclipse
-        self.earth_presence_flag: bool = False                  # True if Earth is present in sensor view
+
+        self.R_BS = None  # Transformation from body frame to sensor frame
+        self.eclipse_flag: bool = False  # True if spacecraft is in eclipse
+        self.earth_presence_flag: bool = False  # True if Earth is present in sensor view
         self._load_cfg(cfg_file)
 
     def _load_cfg(self, cfg_file: Path):
@@ -67,25 +71,33 @@ class VirtualFSS:
         self.eclipse_flag = bool(eclipse_flag)
         self.earth_presence_flag = bool(earth_presence_flag)
 
-    def measure_from_sensor_frame(self, light_vec_sensor: np.ndarray):
+    def _angle_computation(self, incident_light_sensor: np.ndarray):
         """
-        Compute FSS output from one light ray already expressed in sensor frame.
+        Compute FSS angular output from an incident light vector in sensor frame.
 
-        Sensor convention:
-            +z axis is boresight.
-            alpha is signed angle in x-z plane.
-            beta is signed angle in y-z plane.
+        Sensor-frame convention:
+            +z axis points along the sensor boresight.
+            +x direction gives positive alpha.
+            +y direction gives positive beta.
+
+        Angle definition:
+            alpha = atan2(I_s,x, I_s,z)
+            beta  = atan2(I_s,y, I_s,z)
 
         Arguments:
-            light_vec_sensor: 3D light direction vector in sensor frame.
+            incident_light_sensor:
+                3D incident light direction vector expressed in sensor frame.
 
         Returns:
-            dict with alpha_rad, beta_rad, alpha_deg, beta_deg,
-            sun_present, eclipse_flag, earth_presence_flag, and light_vec_sensor.
+            dict with:
+                alpha_deg: signed x-z plane angle [deg]
+                beta_deg: signed y-z plane angle [deg]
+                sun_present: True if light is inside FOV and spacecraft is not in eclipse
         """
-        light_vec_sensor = self._unit(light_vec_sensor)
-        alpha_rad = np.arctan2(light_vec_sensor[0], light_vec_sensor[2])
-        beta_rad = np.arctan2(light_vec_sensor[1], light_vec_sensor[2])
+        incident_light_sensor = self._unit(incident_light_sensor)
+
+        alpha_rad = np.arctan2(incident_light_sensor[0], incident_light_sensor[2])
+        beta_rad = np.arctan2(incident_light_sensor[1], incident_light_sensor[2])
 
         alpha_deg = np.rad2deg(alpha_rad)
         beta_deg = np.rad2deg(beta_rad)
@@ -93,97 +105,63 @@ class VirtualFSS:
         inside_fov = (
                 abs(alpha_deg) <= self.fov_deg
                 and abs(beta_deg) <= self.fov_deg
-                and light_vec_sensor[2] > 0.0
+                and incident_light_sensor[2] > 0.0
         )
+
         sun_present = inside_fov and not self.eclipse_flag
 
         return {
-            "alpha_rad": alpha_rad,
-            "beta_rad": beta_rad,
             "alpha_deg": alpha_deg,
             "beta_deg": beta_deg,
             "sun_present": sun_present,
-            "eclipse_flag": self.eclipse_flag,
-            "earth_presence_flag": self.earth_presence_flag,
-            "light_vec_sensor": light_vec_sensor,
         }
 
-    def measure_from_body_frame(self, light_vec_body: np.ndarray):
+    def sensor_output(self, sun_pos, sat_pos, frame_transform):
         """
-        Compute FSS output from one light ray expressed in body frame.
+        Compute FSS angular output from Sun and satellite position vectors.
 
-        Requires:
-            self.R_BS
+        This method assumes:
+            incident_light = sun_pos - sat_pos
+
+        The incident light vector is passed to frame_transform.
+        frame_transform is expected to return the same vector expressed
+        in spacecraft body frame.
+
+        Then the sensor mounting matrix is applied:
+            I_s = R_BS @ I_b
 
         Arguments:
-            light_vec_body: 3D light direction vector in body frame.
+            sun_pos:
+                3D Sun position vector in the external frame used by frame_transform.
+
+            sat_pos:
+                3D satellite position vector in the same frame as sun_pos.
+
+            frame_transform:
+                External function that converts the incident light vector
+                into body frame.
+
+                Expected behavior:
+                    incident_light_body = frame_transform(incident_light)
 
         Returns:
-            Same dict as measure_from_sensor_frame.
+            Same dict as measure_from_sensor_vector.
         """
-        if not hasattr(self, "R_BS"):
-            raise AttributeError("R_BS is not set. Call set_mounting(R_BS) first.")
-
-        light_vec_body = self._unit(light_vec_body)
-        light_vec_sensor = self.R_BS @ light_vec_body
-
-        return self.measure_from_sensor_frame(light_vec_sensor)
-
-    def measure_from_frame_transform(self, light_vec, from_frame: str, attitude, frame_transform):
-        """
-        Compute FSS output using an external frame transform function.
-
-        This method deliberately does not assume quaternion convention.
-
-        Expected external function:
-            frame_transform(vec, from_frame, to_frame, attitude)
-
-        It should return the vector in body frame.
-
-        Arguments:
-            light_vec: 3D light direction vector in from_frame.
-            from_frame: name of input frame, for example "ECI" or "LVLH".
-            attitude: quaternion or attitude object used by external function.
-            frame_transform: external frame transformation function.
-
-        Returns:
-            Same dict as measure_from_sensor_frame.
-        """
-        light_vec = self._unit(light_vec)
-        light_vec_body = frame_transform(light_vec, from_frame, "BODY", attitude)
-        return self.measure_from_body_frame(light_vec_body)
-
-    def measure_from_positions(self, sun_pos, sat_pos, from_frame: str, attitude, frame_transform):
-        """
-        Compute FSS output from Sun position and satellite position.
-
-        Incident light direction:
-            light_vec = sun_pos - sat_pos
-
-        Arguments:
-            sun_pos: Sun position vector.
-            sat_pos: Satellite position vector.
-            from_frame: frame of sun_pos and sat_pos.
-            attitude: quaternion or attitude object used by external function.
-            frame_transform: external frame transformation function.
-
-        Returns:
-            Same dict as measure_from_sensor_frame.
-        """
+        # TODO: further discuss on the frame of sun_pos and sat_pos is required
         sun_pos = np.asarray(sun_pos, dtype=float)
         sat_pos = np.asarray(sat_pos, dtype=float)
 
         if sun_pos.shape != (3,) or sat_pos.shape != (3,):
             raise ValueError("sun_pos and sat_pos must both be 3D vectors.")
 
-        light_vec = sun_pos - sat_pos
+        if self.R_BS is None:
+            raise AttributeError("R_BS is not set. Call set_mounting(R_BS) first.")
 
-        return self.measure_from_frame_transform(
-            light_vec=light_vec,
-            from_frame=from_frame,
-            attitude=attitude,
-            frame_transform=frame_transform,
-        )
+        incident_light = sun_pos - sat_pos
+        incident_light_body = frame_transform(incident_light)
+        incident_light_sensor = self.R_BS @ incident_light_body
+
+        return self._angle_computation(incident_light_sensor)
 
     @staticmethod
     def _unit(vec: np.ndarray):
@@ -335,10 +313,12 @@ class VirtualSTR:
 
         return self._normalize_quat(q_meas)
 
+
 class VirtualIMU:
     """
     Generic virtual Inertial Measurement Unit model for use in simulation
     """
+
     def __init__(self, cfg_file: Path):
         self.model: str = "Generic IMU"
         self.gyro_lims_rad_s: tuple[float, float] = (0.0, 0.0)
@@ -360,10 +340,12 @@ class VirtualIMU:
         with open(cfg_file, 'r') as f:
             raise NotImplementedError()
 
+
 class VirtualMTM:
     """
     Generic virtual Magnetometer model for use in simulation
     """
+
     def __init__(self, cfg_file: Path):
         self.model: str = "Generic MTM"
         self.lims_ut: tuple[float, float] = (0.0, 0.0)
@@ -386,10 +368,12 @@ class VirtualMTM:
         with open(cfg_file, 'r') as f:
             raise NotImplementedError()
 
+
 class VirtualGNSS:
     """
     Generic virtual Global Navigation Satellite System model for use in simulation
     """
+
     def __init__(self, cfg_file: Path):
         self.model: str = "Generic GNSS"
         self.cov_m2: np.ndarray = np.array([[0.0, 0.0, 0.0],
@@ -408,4 +392,3 @@ class VirtualGNSS:
         """
         with open(cfg_file, 'r') as f:
             raise NotImplementedError()
-
