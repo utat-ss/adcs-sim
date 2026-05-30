@@ -12,7 +12,9 @@ class VirtualFSS:
         self.model: str = "Generic FSS"                         # Model name
         self.fov_deg: float = 0.0                               # Half-cone field of view [deg]
         self.rate_hz: float = 0.0                               # Data rate [Hz]
-        self.cov_deg2: np.ndarray = np.array([[0, 0], [0, 0]]) # Measurement covariance (2x2) [deg^2]
+        self.cov_deg2: np.ndarray = np.array([[0, 0], [0, 0]])  # Measurement covariance (2x2) [deg^2]
+        self.eclipse_flag: bool = False                         # True if spacecraft is in eclipse
+        self.earth_presence_flag: bool = False                  # True if Earth is present in sensor view
         self._load_cfg(cfg_file)
 
     def _load_cfg(self, cfg_file: Path):
@@ -28,6 +30,179 @@ class VirtualFSS:
         # TODO: Config file format
         with open(cfg_file, 'r') as f:
             raise NotImplementedError()
+
+    def set_mounting(self, R_BS: np.ndarray):
+        """
+        Set the rotation matrix from body frame to sensor frame.
+
+        Convention:
+            v_S = R_BS @ v_B
+
+        Arguments:
+            R_BS: 3x3 rotation matrix from body frame to sensor frame.
+
+        Returns:
+            None
+        """
+        R_BS = np.asarray(R_BS, dtype=float)
+        if R_BS.shape != (3, 3):
+            raise ValueError("R_BS must be a 3x3 matrix.")
+        if not np.allclose(R_BS @ R_BS.T, np.eye(3), atol=1e-6):
+            raise ValueError("R_BS must be orthonormal.")
+        if not np.isclose(np.linalg.det(R_BS), 1.0, atol=1e-6):
+            raise ValueError("R_BS must have determinant +1.")
+        self.R_BS = R_BS
+
+    def set_environment_flags(self, eclipse_flag: bool = False, earth_presence_flag: bool = False):
+        """
+        Set environment flags for the sensor.
+
+        Arguments:
+            eclipse_flag: True if spacecraft is in eclipse.
+            earth_presence_flag: True if Earth is present in sensor view.
+
+        Returns:
+            None
+        """
+        self.eclipse_flag = bool(eclipse_flag)
+        self.earth_presence_flag = bool(earth_presence_flag)
+
+    def measure_from_sensor_frame(self, light_vec_sensor: np.ndarray):
+        """
+        Compute FSS output from one light ray already expressed in sensor frame.
+
+        Sensor convention:
+            +z axis is boresight.
+            alpha is signed angle in x-z plane.
+            beta is signed angle in y-z plane.
+
+        Arguments:
+            light_vec_sensor: 3D light direction vector in sensor frame.
+
+        Returns:
+            dict with alpha_rad, beta_rad, alpha_deg, beta_deg,
+            sun_present, eclipse_flag, earth_presence_flag, and light_vec_sensor.
+        """
+        light_vec_sensor = self._unit(light_vec_sensor)
+        alpha_rad = np.arctan2(light_vec_sensor[0], light_vec_sensor[2])
+        beta_rad = np.arctan2(light_vec_sensor[1], light_vec_sensor[2])
+
+        alpha_deg = np.rad2deg(alpha_rad)
+        beta_deg = np.rad2deg(beta_rad)
+
+        inside_fov = (
+                abs(alpha_deg) <= self.fov_deg
+                and abs(beta_deg) <= self.fov_deg
+                and light_vec_sensor[2] > 0.0
+        )
+        sun_present = inside_fov and not self.eclipse_flag
+
+        return {
+            "alpha_rad": alpha_rad,
+            "beta_rad": beta_rad,
+            "alpha_deg": alpha_deg,
+            "beta_deg": beta_deg,
+            "sun_present": sun_present,
+            "eclipse_flag": self.eclipse_flag,
+            "earth_presence_flag": self.earth_presence_flag,
+            "light_vec_sensor": light_vec_sensor,
+        }
+
+    def measure_from_body_frame(self, light_vec_body: np.ndarray):
+        """
+        Compute FSS output from one light ray expressed in body frame.
+
+        Requires:
+            self.R_BS
+
+        Arguments:
+            light_vec_body: 3D light direction vector in body frame.
+
+        Returns:
+            Same dict as measure_from_sensor_frame.
+        """
+        if not hasattr(self, "R_BS"):
+            raise AttributeError("R_BS is not set. Call set_mounting(R_BS) first.")
+
+        light_vec_body = self._unit(light_vec_body)
+        light_vec_sensor = self.R_BS @ light_vec_body
+
+        return self.measure_from_sensor_frame(light_vec_sensor)
+
+    def measure_from_frame_transform(self, light_vec, from_frame: str, attitude, frame_transform):
+        """
+        Compute FSS output using an external frame transform function.
+
+        This method deliberately does not assume quaternion convention.
+
+        Expected external function:
+            frame_transform(vec, from_frame, to_frame, attitude)
+
+        It should return the vector in body frame.
+
+        Arguments:
+            light_vec: 3D light direction vector in from_frame.
+            from_frame: name of input frame, for example "ECI" or "LVLH".
+            attitude: quaternion or attitude object used by external function.
+            frame_transform: external frame transformation function.
+
+        Returns:
+            Same dict as measure_from_sensor_frame.
+        """
+        light_vec = self._unit(light_vec)
+        light_vec_body = frame_transform(light_vec, from_frame, "BODY", attitude)
+        return self.measure_from_body_frame(light_vec_body)
+
+    def measure_from_positions(self, sun_pos, sat_pos, from_frame: str, attitude, frame_transform):
+        """
+        Compute FSS output from Sun position and satellite position.
+
+        Incident light direction:
+            light_vec = sun_pos - sat_pos
+
+        Arguments:
+            sun_pos: Sun position vector.
+            sat_pos: Satellite position vector.
+            from_frame: frame of sun_pos and sat_pos.
+            attitude: quaternion or attitude object used by external function.
+            frame_transform: external frame transformation function.
+
+        Returns:
+            Same dict as measure_from_sensor_frame.
+        """
+        sun_pos = np.asarray(sun_pos, dtype=float)
+        sat_pos = np.asarray(sat_pos, dtype=float)
+
+        if sun_pos.shape != (3,) or sat_pos.shape != (3,):
+            raise ValueError("sun_pos and sat_pos must both be 3D vectors.")
+
+        light_vec = sun_pos - sat_pos
+
+        return self.measure_from_frame_transform(
+            light_vec=light_vec,
+            from_frame=from_frame,
+            attitude=attitude,
+            frame_transform=frame_transform,
+        )
+
+    @staticmethod
+    def _unit(vec: np.ndarray):
+        """
+        Normalize a 3D vector.
+
+        Arguments:
+            vec: 3D vector.
+
+        Returns:
+            Unit vector.
+        """
+        vec = np.asarray(vec, dtype=float)
+        if vec.shape != (3,):
+            raise ValueError("Vector must have shape (3,).")
+        norm = np.linalg.norm(vec)
+        if norm == 0:
+            raise ValueError("Zero vector cannot be normalized.")
+        return vec / norm
 
 
 from pathlib import Path
