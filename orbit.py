@@ -438,3 +438,49 @@ def mee_motion(me: ModifiedEquinoctialElements, L_rad: float, p_rsw_m2_s2: np.nd
     medot = np.array([pdot_km_s, fdot__s, gdot__s, hdot__s, kdot__s, Ldot_rad_s])
 
     return medot
+
+def cowell_motion(x: np.ndarray, p_m2_s2: np.ndarray):
+    """
+    Calculate the orbital motion of a Cartesian state using Cowell's method.
+
+    Arguments:
+    x:      (np.ndarray) (6x1) Orbital state vector.
+    p_m2_s2 (np.ndarray) (3x1) Perturbing accelerations.
+
+    Returns:
+    xdot:   (np.ndarray) (6x1) Orbit motion.
+    """
+    #TODO: Implementation
+    xdot = np.array([0., 0., 0., 0., 0., 0.])
+    return xdot
+
+def encke_motion(x: np.ndarray):
+    """
+    Calculate the orbital motion of a Cartesian state using Encke's method.
+
+    Arguments:
+    x:      (np.ndarray) (6x1) Orbital state vector.
+    p_m2_s2 (np.ndarray) (3x1) Perturbing accelerations.
+
+    Returns:
+    xdot:   (np.ndarray) (6x1) Orbit motion.
+    """
+    # TODO: Implementation
+    xdot = np.array([0., 0., 0., 0., 0., 0.])
+    return xdot
+
+def propagate_sgp4(tle: str, t: float):
+    """
+    Propagate an orbit from an initial state given by a TLE using SGP4.
+
+    Arguments:
+    tle:    (str) Two Line Element set describing the orbital state at a specified epoch.
+    t:      (float) Time to retrieve orbital state vector.
+
+    Returns:
+    x:      (np.ndarray) Orbital state at specified time.
+    """
+    #TODO: Appropriate time specification (time since periapsis? epoch time?)
+    #TODO: SGP4 implementation
+    x = np.array([0., 0., 0., 0., 0., 0.])
+    return x
