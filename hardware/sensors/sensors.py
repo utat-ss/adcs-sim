@@ -14,11 +14,7 @@ class VirtualFSS:
         self.model: str = "Generic FSS"  # Model name
         self.fov_deg: float = 0.0  # Half-cone field of view [deg]
         self.rate_hz: float = 0.0  # Data rate [Hz]
-        self.cov_deg2: np.ndarray = np.array([[0, 0], [0, 0]])  # Measurement covariance (2x2) [deg^2]
-
-        self.R_BS = None  # Transformation from body frame to sensor frame
-        self.eclipse_flag: bool = False  # True if spacecraft is in eclipse
-        self.earth_presence_flag: bool = False  # True if Earth is present in sensor view
+        self.cov_deg2: np.ndarray = np.zeros((2, 2), dtype=float)  # Measurement covariance (2x2) [deg^2]
         self._load_cfg(cfg_file)
 
     def _load_cfg(self, cfg_file: Path):
@@ -34,42 +30,6 @@ class VirtualFSS:
         # TODO: Config file format
         with open(cfg_file, 'r') as f:
             raise NotImplementedError()
-
-    def set_mounting(self, R_BS: np.ndarray):
-        """
-        Set the rotation matrix from body frame to sensor frame.
-
-        Convention:
-            v_S = R_BS @ v_B
-
-        Arguments:
-            R_BS: 3x3 rotation matrix from body frame to sensor frame.
-
-        Returns:
-            None
-        """
-        R_BS = np.asarray(R_BS, dtype=float)
-        if R_BS.shape != (3, 3):
-            raise ValueError("R_BS must be a 3x3 matrix.")
-        if not np.allclose(R_BS @ R_BS.T, np.eye(3), atol=1e-6):
-            raise ValueError("R_BS must be orthonormal.")
-        if not np.isclose(np.linalg.det(R_BS), 1.0, atol=1e-6):
-            raise ValueError("R_BS must have determinant +1.")
-        self.R_BS = R_BS
-
-    def set_environment_flags(self, eclipse_flag: bool = False, earth_presence_flag: bool = False):
-        """
-        Set environment flags for the sensor.
-
-        Arguments:
-            eclipse_flag: True if spacecraft is in eclipse.
-            earth_presence_flag: True if Earth is present in sensor view.
-
-        Returns:
-            None
-        """
-        self.eclipse_flag = bool(eclipse_flag)
-        self.earth_presence_flag = bool(earth_presence_flag)
 
     def _angle_computation(self, incident_light_sensor: np.ndarray):
         """
@@ -92,9 +52,18 @@ class VirtualFSS:
             dict with:
                 alpha_deg: signed x-z plane angle [deg]
                 beta_deg: signed y-z plane angle [deg]
-                sun_present: True if light is inside FOV and spacecraft is not in eclipse
+                sun_present: True if light is inside FOV
         """
-        incident_light_sensor = self._unit(incident_light_sensor)
+        incident_light_sensor = np.asarray(incident_light_sensor, dtype=float)
+        if incident_light_sensor.shape != (3,):
+            raise ValueError("incident_light_sensor must be a 3D vector.")
+
+        if np.linalg.norm(incident_light_sensor) == 0:
+            return {
+                "alpha_deg": 0,
+                "beta_deg": 0,
+                "sun_present": False,
+            }
 
         alpha_rad = np.arctan2(incident_light_sensor[0], incident_light_sensor[2])
         beta_rad = np.arctan2(incident_light_sensor[1], incident_light_sensor[2])
@@ -108,79 +77,63 @@ class VirtualFSS:
                 and incident_light_sensor[2] > 0.0
         )
 
-        sun_present = inside_fov and not self.eclipse_flag
+        noise = np.random.multivariate_normal(mean=np.zeros(2), cov=self.cov_deg2)
+        # TODO: self.cov_deg2 must follow the same ordering as the measurement vector:
+        #       [alpha_deg, beta_deg].
+        #       cov_deg2[0, 0] is Var(alpha), cov_deg2[1, 1] is Var(beta),
+        #       and cov_deg2[0, 1] / cov_deg2[1, 0] is Cov(alpha, beta).
+        alpha_noise = noise[0]
+        beta_noise = noise[1]
+
+        alpha_deg += alpha_noise
+        beta_deg += beta_noise
 
         return {
             "alpha_deg": alpha_deg,
             "beta_deg": beta_deg,
-            "sun_present": sun_present,
+            "sun_present": inside_fov,
         }
 
-    def sensor_output(self, sun_pos, sat_pos, frame_transform):
+    def measure(self, sun_vec_body, R_BS, r_mount=None):
         """
         Compute FSS angular output from Sun and satellite position vectors.
 
         This method assumes:
-            incident_light = sun_pos - sat_pos
-
-        The incident light vector is passed to frame_transform.
-        frame_transform is expected to return the same vector expressed
-        in spacecraft body frame.
+            incident_light = sun_pos - r_mount (optional)
 
         Then the sensor mounting matrix is applied:
             I_s = R_BS @ I_b
 
         Arguments:
-            sun_pos:
-                3D Sun position vector in the external frame used by frame_transform.
 
-            sat_pos:
-                3D satellite position vector in the same frame as sun_pos.
+            :param sun_vec_body:
+                3D Sun position vector in the body frame.
 
-            frame_transform:
-                External function that converts the incident light vector
-                into body frame.
+            :param R_BS:
+                External mounting matrix turns from body frame to sensor frame
 
-                Expected behavior:
-                    incident_light_body = frame_transform(incident_light)
+            :param r_mount: mounting position, usually negligible.
 
         Returns:
             Same dict as measure_from_sensor_vector.
         """
-        # TODO: further discuss on the frame of sun_pos and sat_pos is required
-        sun_pos = np.asarray(sun_pos, dtype=float)
-        sat_pos = np.asarray(sat_pos, dtype=float)
+        if r_mount is None:
+            r_mount = np.zeros(3)
+        else:
+            r_mount = np.asarray(r_mount, dtype=float)
 
-        if sun_pos.shape != (3,) or sat_pos.shape != (3,):
-            raise ValueError("sun_pos and sat_pos must both be 3D vectors.")
+        sun_vec_body = np.asarray(sun_vec_body, dtype=float)
+        if sun_vec_body.shape != (3,) or r_mount.shape != (3,):
+            raise ValueError("sun_pos and r_mount must both be 3D vectors.")
 
-        if self.R_BS is None:
-            raise AttributeError("R_BS is not set. Call set_mounting(R_BS) first.")
+        R_BS = np.asarray(R_BS, dtype=float)
+        if R_BS.shape != (3, 3):
+            raise ValueError("R_BS must be a 3x3 matrix.")
 
-        incident_light = sun_pos - sat_pos
-        incident_light_body = frame_transform(incident_light)
-        incident_light_sensor = self.R_BS @ incident_light_body
+        incident_light_body = sun_vec_body - r_mount
+        incident_light_sensor = R_BS @ incident_light_body
 
         return self._angle_computation(incident_light_sensor)
-
-    @staticmethod
-    def _unit(vec: np.ndarray):
-        """
-        Normalize a 3D vector.
-
-        Arguments:
-            vec: 3D vector.
-
-        Returns:
-            Unit vector.
-        """
-        vec = np.asarray(vec, dtype=float)
-        if vec.shape != (3,):
-            raise ValueError("Vector must have shape (3,).")
-        norm = np.linalg.norm(vec)
-        if norm == 0:
-            raise ValueError("Zero vector cannot be normalized.")
-        return vec / norm
 
 
 from pathlib import Path
