@@ -1,0 +1,10 @@
+{
+  "model": "Tensor Tech FSS-15",
+  "type": "Sun Sensor",
+  "fov_deg": 60.0,
+  "rate_hz": 8.0,
+  "cov_deg2": [
+    [0.2, 0.0],
+    [0.0, 0.2]
+  ]
+}
