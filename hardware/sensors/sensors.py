@@ -3,7 +3,30 @@
 from pathlib import Path
 import json
 import numpy as np
+from abc import ABC, abstractmethod
 
+class VirtualSensor(ABC):
+    def __init__(self, cfg_file: Path):
+        # common fields
+        self.cfg_file = cfg_file
+        self.model: str = ""
+
+    def load_cfg(self):
+        """
+        Optional shared helper for standardizez config loading (?)
+        """
+        raise NotImplementedError("Each sensor can override this if needed")
+    
+    @abstractmethod
+    def measure(self, *args, **kwargs):
+        """
+        Every sensor must implement its own measurement function.
+        Output format is sensor-specific.
+        """
+        pass
+
+
+# ----- Sensor specific subclasses that inherit from VirtualSensor are below ----
 
 class VirtualFSS:
     """
