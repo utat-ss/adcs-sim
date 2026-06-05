@@ -4,15 +4,9 @@ import json
 import numpy as np
 
 from sensors.sensors import (VirtualFSS, VirtualSTR,
-<<<<<<< HEAD
-VirtualSTR, VirtualIMU, VirtualMTM, VirtualGNSS, 
+VirtualIMU, VirtualMTM, VirtualGNSS, 
 VirtualSensor)
-
 from actuators.actuators import (VirtualRWL, VirtualCMG, VirtualActuator)
-=======
- VirtualIMU, VirtualMTM, VirtualGNSS, 
-VirtualSensor, VirtualActuator)
->>>>>>> 37ae5ec (ADD: ADCS builder safety features)
 
 SENSOR_ICD_DIR = Path("./sensors/icd")
 
