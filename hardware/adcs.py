@@ -3,7 +3,9 @@ import json
 
 from sensors.sensors import (VirtualFSS, VirtualSTR,
 VirtualSTR, VirtualIMU, VirtualMTM, VirtualGNSS, 
-VirtualSensor, VirtualActuator)
+VirtualSensor)
+
+from actuators.actuators import (VirtualRWL, VirtualCMG, VirtualActuator)
 
 class ADCS:
     def __init__(self, id: str, moi: np.ndarray):
@@ -45,16 +47,10 @@ class ADCS:
         actuator_type = data["type"]
 
         match actuator_type:
-            case "STR":
-                 new_actuator = VirtualSTR(id, path)
-            case "FSS":
-                 new_actuator = VirtualSTR(id, path)
-            case "IMU":
-                 new_actuator = VirtualSTR(id, path)
-            case "MTM":
-                 new_actuator = VirtualSTR(id, path)
-            case "GNSS":
-                 new_actuator = VirtualSTR(id, path)
+            case "CMG":
+                 new_actuator = VirtualCMG(path)
+            case "RWL":
+                 new_actuator = VirtualRWL(path)
             case _:
                 raise ValueError(f"Unknown actuator type: {actuator_type}")
 
