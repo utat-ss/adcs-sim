@@ -96,7 +96,7 @@ def quatNormalize(q):
 
 """
 
-Python code for performing quaternion -> Rotation Matrix conversions. 
+Python code for performing quaternion <-> Rotation Matrix conversions. 
 
 Note that quaternion arguments must all be in scalar-last JPL convention, i.e., in the format of [x, y, z, w]. 
 
@@ -121,3 +121,10 @@ def quatToRotationMatrix(quat):
     
     return R
 
+def rotationMatrixToQuat(matrix): 
+
+    rotation = R.from_matrix(matrix)
+
+    quaternion = rotation.as_quat()
+
+    return np.array(quaternion)
