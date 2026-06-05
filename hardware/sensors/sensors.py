@@ -28,7 +28,7 @@ class VirtualSensor(ABC):
 
 # ----- Sensor specific subclasses that inherit from VirtualSensor are below ----
 
-class VirtualFSS:
+class VirtualFSS(VirtualSensor):
     """
     Generic virtual Fine Sun Sensor model for use in simulation
     """
@@ -164,7 +164,7 @@ import json
 import numpy as np
 
 
-class VirtualSTR:
+class VirtualSTR(VirtualSensor):
     """
     Generic virtual star tracker model for use in simulation.
 
@@ -292,7 +292,7 @@ class VirtualSTR:
         return self._normalize_quat(q_meas)
 
 
-class VirtualIMU:
+class VirtualIMU(VirtualSensor):
     """
     Generic virtual Inertial Measurement Unit model for use in simulation
     """
@@ -319,7 +319,7 @@ class VirtualIMU:
             raise NotImplementedError()
 
 
-class VirtualMTM:
+class VirtualMTM(VirtualSensor):
     """
     Generic virtual Magnetometer model for use in simulation
     """
@@ -347,7 +347,7 @@ class VirtualMTM:
             raise NotImplementedError()
 
 
-class VirtualGNSS:
+class VirtualGNSS(VirtualSensor):
     """
     Generic virtual Global Navigation Satellite System model for use in simulation
     """
