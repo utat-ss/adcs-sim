@@ -1,5 +1,5 @@
 {
-  "model": "Tensor Tech FSS-15M",
+  "model": "FSS-15M",
   "type": "MTM",
   "lims_ut": [-800.0, 800.0],
   "bias_ut": 1.0,
