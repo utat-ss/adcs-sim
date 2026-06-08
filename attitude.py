@@ -9,6 +9,8 @@ import math
 import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
 
+
+# TODO: Doc strings explaining what the functions do, what their inputs are, and what their outputs are. Refer to virtual-sensors branch for some examples.
 def attitude_kinematics(epsilon, eta, omega):
     epsilon_cross = skew(epsilon)
 
@@ -33,6 +35,7 @@ def attitude_dynamics(omega, J, Jinv, torque_ext):
 
     return omega_dot
 
+# TODO: This should live with utils. Can leave for now but will need to reorganize when code starts getting plumbed together.
 def skew(b):
     return np.array([
         [0, -b[2], b[1]],
@@ -40,6 +43,8 @@ def skew(b):
         [-b[1], b[0], 0]
     ])
 
+# TODO: Inertia matrix must not be a constant defined here. It's just an input to the system.
+# TODO: This stuff can be put into a test file along with some other example cases.
 # Inertia Matrix
 Jxx = 1
 Jxy = 0
@@ -126,7 +131,7 @@ def dynamics(t, x, J, torque_ext):
         omega_dot
     ])
 
-
+# TODO: Send to the test function
 sol = solve_ivp(
     lambda t, x: dynamics(t, x, J, torque_ext),
     total_time,
@@ -162,6 +167,7 @@ plt.plot(t, omega_values[:,1], label = 'omg_y')
 plt.plot(t, omega_values[:,2], label = 'omg_z')
 plt.legend()
 
+# TODO: qnorm will be a function we put in utils
 # Figure 3 : Quaternion Norm
 qnorm = np.sqrt(
     epsilon_values[:,0]**2 +
