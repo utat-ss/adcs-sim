@@ -5,6 +5,8 @@ import json
 import numpy as np
 from abc import ABC, abstractmethod
 
+import math
+
 class VirtualSensor(ABC):
     def __init__(self, cfg_file: Path):
         # common fields
@@ -13,7 +15,7 @@ class VirtualSensor(ABC):
 
     def load_cfg(self):
         """
-        Optional shared helper for standardizez config loading (?)
+        Optional shared helper for standardized config loading.
         """
         raise NotImplementedError("Each sensor can override this if needed")
     
@@ -157,12 +159,6 @@ class VirtualFSS(VirtualSensor):
         incident_light_sensor = R_BS @ incident_light_body
 
         return self._angle_computation(incident_light_sensor)
-
-
-from pathlib import Path
-import json
-import numpy as np
-
 
 class VirtualSTR(VirtualSensor):
     """
@@ -349,18 +345,21 @@ class VirtualMTM(VirtualSensor):
 
 class VirtualGNSS(VirtualSensor):
     """
-    Generic virtual Global Navigation Satellite System model for use in simulation
+    Generic virtual Global Navigation Satellite System model for use in simulation.
     """
 
     def __init__(self, cfg_file: Path):
+        self.type: str = "REC"
         self.model: str = "Generic GNSS"
-        self.cov_m2: np.ndarray = np.array([[0.0, 0.0, 0.0],
-                                            [0.0, 0.0, 0.0],
-                                            [0.0, 0.0, 0.0]])
+        self.compatible_satellites: str = ""
+
+        # Measurement covariance matrix for [latitude, longitude, altitude] in meters
+        self.LLA_cov_matrix_meters: np.ndarray = np.array([[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]], dtype=float)
+        self._load_cfg(cfg_file)
 
     def _load_cfg(self, cfg_file: Path):
         """
-        Populate GNSS parameters using a configuration file.
+        Populate GNSS/REC parameters using a configuration file.
 
         Arguments:
         cfg_file:   (Path) Path to the configuration file for the GNSS model to be used.
@@ -368,5 +367,137 @@ class VirtualGNSS(VirtualSensor):
         Returns:
         None
         """
-        with open(cfg_file, 'r') as f:
-            raise NotImplementedError()
+        cfg_file = Path(cfg_file)
+
+        if not cfg_file.exists():
+            raise FileNotFoundError(f"REC config file not found: {cfg_file}")
+
+        with open(cfg_file, "r") as f:
+            cfg = json.load(f)
+
+        self.model = str(cfg.get("model", self.model))
+        self.compatible_satellites = str(cfg["compatible_satellites"])
+        self.LLA_cov_matrix_meters = np.asarray(cfg["LLA_cov_matrix_meters"], dtype=float)
+
+    @staticmethod
+    def haversine(x):
+        """
+        Helper function for GC_distance. Computes haversine of a given input x.
+        """
+        return (math.sin(x/2))**2
+    
+    @staticmethod
+    def GC_distance(lat_1, long_1, lat_2, long_2, altitude):
+        """
+        Compute distance along a great circle between two given pairs of coordinates. 
+
+        Note: For testing purposes - feel free to move elsewhere in code base. The average GC_distance
+        between true input coords and a sufficient set of output LLA coords using measure() should be ~2.13 m
+        based on the 2.0 CEP accuracy of the Orion B16 Receiver.
+        """
+        delta_lat = (lat_2 - lat_1) * math.pi / 180
+        delta_long = (long_2 - long_1) * math.pi / 180
+
+        hav_theta = VirtualGNSS.haversine(delta_lat) + math.cos(lat_1 * math.pi / 180) * math.cos(lat_2 * math.pi / 180) * VirtualGNSS.haversine(delta_long)
+
+        return 2 * math.asin(hav_theta**0.5) * altitude
+    
+    @staticmethod
+    def Euc_distance(lat_1, long_1, altitude_1, lat_2, long_2, altitude_2):
+        """
+        Compute Euclidean distance between two different pairs of coordinates.
+
+        Note: For testing purposes - feel free to move elsewhere in code base.
+        """
+        theta_1_rad = math.pi / 2 - lat_1 * math.pi / 180
+        long_1_rad = long_1 * math.pi / 180
+        theta_2_rad = math.pi / 2 - lat_2 * math.pi / 180
+        long_2_rad = long_2 * math.pi / 180
+
+        x1 = altitude_1 * math.sin(theta_1_rad) * math.cos(long_1_rad)
+        x2 = altitude_2 * math.sin(theta_2_rad) * math.cos(long_2_rad)
+
+        y1 = altitude_1 * math.sin(theta_1_rad) * math.sin(long_1_rad)
+        y2 = altitude_2 * math.sin(theta_2_rad) * math.sin(long_2_rad)
+
+        z1 = altitude_1 * math.cos(theta_1_rad)
+        z2 = altitude_2 * math.cos(theta_2_rad)
+
+        return math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2 + (z2 - z1) ** 2)
+
+    def measure(self, true_coords_LLA):
+        """
+        Compute REC noisy positon output in LLA from input LLA coordinates, where 
+        altitude is defined as the distance to the center of the Earth (this definitation can be changed later if needed).
+
+        Note 1: contains conversion from standard LLA [latitude, longitude, altitude]
+        to modified LLA [latitude_meters, longitude_meters, altitude] and back to use known
+        covariance values.
+
+        Note 2: should be accurate (in providing values with the desired randomness) for all valid positions
+        except within ~2 m of either pole, where values are more concentrated than desired (may be fixed in future version).
+
+        Arguments:
+
+            :param true_coords_LLA:
+                True, standard LLA [latitude, longitude, altitude] coordinates of satellite.
+                Values must be in the range -90 <= latitude <= 90, -180 < longitude <= 180, and altitude > 0.
+
+        Returns:
+            Noisy, standard LLA [latitude, longitude, altitude] coordinates of satellite. 
+            Values should be in the range -90 <= latitude <= 90, -180 < longitude <= 180, and altitude > 0.
+        """
+        if len(true_coords_LLA) != 3:
+            raise ValueError("true_coords_LLA must be a list of length 3.")
+        
+        if true_coords_LLA[0] < -90.0 or true_coords_LLA[0] > 90.0:
+            raise ValueError("Latitude value must be in the range -90 <= latitude <= 90.")
+        
+        if true_coords_LLA[1] < -180.0 or true_coords_LLA[1] > 180.0:
+            raise ValueError("Longitude value must be in the range -180 < longitude <= 180.")
+        
+        if true_coords_LLA[2] <= 0.0:
+            raise ValueError("Altitude value must be in the range altitude > 0.")
+
+        true_lat_rad = true_coords_LLA[0] * math.pi / 180
+        true_long_rad = true_coords_LLA[1] * math.pi / 180
+        true_alt = true_coords_LLA[2]
+
+        lat_dist_m = true_lat_rad * true_alt
+        long_dist_m = true_long_rad * true_alt * math.cos(true_lat_rad)
+
+        noise = np.random.multivariate_normal(np.zeros(3), self.LLA_cov_matrix_meters)
+
+        noisy_lat_dist_m = lat_dist_m + noise[0]
+        noisy_long_dist_m = long_dist_m + noise[1]
+        noisy_alt = true_alt + noise[2]
+
+        noisy_coords_LLA = np.zeros(3)
+        noisy_lat_rad = noisy_lat_dist_m / true_alt 
+        noisy_coords_LLA[0] = (180 * noisy_lat_rad) / math.pi
+
+        buff = 0.00000001
+        if true_lat_rad < math.pi/2 - buff and true_lat_rad > -math.pi/2 + buff: # handling edge case
+            true_cos_val = math.cos(true_lat_rad)
+            noisy_coords_LLA[1] = (180 * noisy_long_dist_m) / (math.pi * true_alt * true_cos_val) 
+        else:
+            noisy_coords_LLA[1] = 0.0
+        noisy_coords_LLA[2] = noisy_alt
+
+        # Ensuring output is within intended range
+
+        if noisy_coords_LLA[0] > 90.0:
+            noisy_coords_LLA[0] = 180.0 - noisy_coords_LLA[0]
+            noisy_coords_LLA[1] += 180.0
+
+        if noisy_coords_LLA[0] < -90.0:
+            noisy_coords_LLA[0] = -180.0 - noisy_coords_LLA[0]
+            noisy_coords_LLA[1] += 180.0
+            
+        while noisy_coords_LLA[1] > 180.0:
+            noisy_coords_LLA[1] -= 360.0
+        
+        while noisy_coords_LLA[1] <= -180.0:
+            noisy_coords_LLA[1] += 360.0
+            
+        return noisy_coords_LLA
