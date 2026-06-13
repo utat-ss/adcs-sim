@@ -8,10 +8,25 @@ import numpy as np
 import math
 import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
+from test_attitude import Jinv
 
 
 # TODO: Doc strings explaining what the functions do, what their inputs are, and what their outputs are. Refer to virtual-sensors branch for some examples.
 def attitude_kinematics(epsilon, eta, omega):
+    '''
+    Compute quarternion kinematics
+
+    Arguments:
+        epsilon (ndarray): Vector component of the quarternion
+        eta (float): Scalar component of the quaternion
+        omega (ndarray): Body of angular velocity vector [rad/s]
+    
+    Returns:
+        tuple: 
+            epsilon_dot (ndarray): Quaternion vector derivative
+            eta_dot (float) = Quaternion scalar derivative
+
+    '''
     epsilon_cross = skew(epsilon)
 
     epsilon_dot = (
@@ -25,6 +40,19 @@ def attitude_kinematics(epsilon, eta, omega):
     return epsilon_dot, eta_dot
 
 def attitude_dynamics(omega, J, Jinv, torque_ext):
+    '''
+    Compute attitude dynamics
+    
+    Arguments:
+        omega (ndarray): Body of angular velocity vector [rad/s]
+        J (ndarray): Inertia matrix
+        Jinv (ndarray): Inverse of the inertia matrix
+        torque_ext (ndarray): External torque on the cubesat [Nm]
+
+    Returns:
+        omega_dot (ndarray): Time derivative of the body angular velocity vector [rad/s^2]
+    
+    '''
     omega_dot = (
         Jinv
         @ (
@@ -35,7 +63,7 @@ def attitude_dynamics(omega, J, Jinv, torque_ext):
 
     return omega_dot
 
-# TODO: This should live with utils. Can leave for now but will need to reorganize when code starts getting plumbed together.
+# TODO: This should live with utils. Leave here until code gets plumbed together.
 def skew(b):
     return np.array([
         [0, -b[2], b[1]],
@@ -43,77 +71,19 @@ def skew(b):
         [-b[1], b[0], 0]
     ])
 
-# TODO: Inertia matrix must not be a constant defined here. It's just an input to the system.
-# TODO: This stuff can be put into a test file along with some other example cases.
-# Inertia Matrix
-Jxx = 1
-Jxy = 0
-Jxz = 0
-Jyx = 0
-Jyy = 1
-Jyz = 0
-Jzx = 0
-Jzy = 0
-Jzz = 1
-
-J = np.array([
-    [Jxx, Jxy, Jxz],
-    [Jyx, Jyy, Jyz],
-    [Jzx, Jzy, Jzz]
-])
-
-Jinv = np.linalg.inv(J)
-
-print(J)
-print(Jinv)
-
-# Initial condictions: values of the state vector at time = 0. 
-# Initial tilt
-epsilon0 = np.array([
-    [0.1],
-    [0.0],
-    [0.0]
-])
-print(epsilon0)
-
-# Keep unit quaternion 
-# This comes from keeping the quarternion constraint : e1^2 + e2^2 + e3^3 + eta^2 = 1
-# As we need to calculate the length of the vector we are using
-eta0 = math.sqrt(1 - np.linalg.norm(epsilon0)**2)
-print(eta0)
-
-# Initial spin
-omega0 = np.array([
-    [0.01],
-    [0.02],
-    [0.0]
-])
-print(omega0)
-
-# State vector
-x0 = np.concatenate([
-    epsilon0.flatten(),
-    [eta0],
-    omega0.flatten()
-])
-print(x0)
-
-# External torque (asuming no external torque on cubesat)
-torque_ext = np.array([
-    [0],
-    [0],
-    [0]
-])
-
-# Simulation time (currently running for 2 minutes)
-t_start = 0
-t_end = 60*90
-total_time = [t_start, t_end]
-
-
-# ODE for the simulation 
-# in MATLAB, it was: [t, X] = ode45(@(t, x) dynamics(t, x, J, torque_ext), total_time, x0);
 def dynamics(t, x, J, torque_ext):
+    '''
+    Convert current states into their time derivatives for the ODE solver
+    
+    Arguments:
+        t (float): current simulation time
+        x (ndarray): full state vector of the spacecraft
+        J (ndarray): inertia matrix
+        torque_external(ndarray): External torque on the cubesat [Nm]
+
+    Returns:
+        xdot (ndarray): time derivative of full state vector
+    '''
     epsilon = x[0:3]
     eta = x[3]
     omega = x[4:7]
@@ -130,52 +100,3 @@ def dynamics(t, x, J, torque_ext):
         [eta_dot],
         omega_dot
     ])
-
-# TODO: Send to the test function
-sol = solve_ivp(
-    lambda t, x: dynamics(t, x, J, torque_ext),
-    total_time,
-    x0,
-    method='RK45'
-)
-t = sol.t 
-X = sol.y.T # sol.y has shape (states, time_points)
-
-print(sol.success)
-print(sol.message)
-print(X[:5,:])
-epsilon_values = X[:, 0:3]
-eta_values = X[:, 3]
-omega_values = X[:, 4:7]
-
-# Results
-
-print("Time eps_x eps_y eps_z eta omg_x omg_y omg_z")
-
-# Figure 1 : Quaternion Components
-plt.figure()
-plt.plot(t, epsilon_values[:,0], label = 'eps_x')
-plt.plot(t, epsilon_values[:,1], label = 'eps_y')
-plt.plot(t, epsilon_values[:,2], label = 'eps_z')
-plt.plot(t, eta_values, label='eta')
-plt.legend()
-
-# Figure 2 : Angular Velocity Components
-plt.figure()
-plt.plot(t, omega_values[:,0], label = 'omg_x')
-plt.plot(t, omega_values[:,1], label = 'omg_y')
-plt.plot(t, omega_values[:,2], label = 'omg_z')
-plt.legend()
-
-# TODO: qnorm will be a function we put in utils
-# Figure 3 : Quaternion Norm
-qnorm = np.sqrt(
-    epsilon_values[:,0]**2 +
-    epsilon_values[:,1]**2 +
-    epsilon_values[:,2]**2 +
-    eta_values**2
-)
-
-plt.figure()
-plt.plot(t, qnorm)
-plt.show()
