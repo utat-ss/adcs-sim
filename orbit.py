@@ -34,6 +34,9 @@ class KeplerianElements(BaseModel):
             raise ValueError(f"Eccentricity must be greater than or equal to 0. Got {v}.")
         return v
 
+    def as_array(self):
+        return np.array([self.a_km, self.e, self.i_rad, self.Om_rad, self.om_rad])
+
 class EquinoctialElements(BaseModel):
     """
     Set of Equinoctial Elements for a specified orbit.
@@ -43,7 +46,9 @@ class EquinoctialElements(BaseModel):
     k: float        # eccentricity vector x {e cos(Om + om)}
     p: float        # orientation vector y {tan(i/2) sin(Om)}
     q: float        # orientation vector x {tan(i/2) cos(Om)}
-    #L_rad: float    # mean longitude {Om + om + M} [rad]
+
+    def as_array(self):
+        return np.array([self.a_km, self.h, self.k, self.p, self.q])
 
 class ModifiedEquinoctialElements(BaseModel):
     """
@@ -54,7 +59,6 @@ class ModifiedEquinoctialElements(BaseModel):
     g: float        # eccentricity vector y {e sin(om + Om)}
     h: float        # orientation vector y {tan(i/2) sin(Om)}
     k: float        # orientation vector x {tan(i/2) cos(Om)}
-    #L_rad: float    # true longitude {Om + om + nu} [rad]
 
     @field_validator("p_km")
     @classmethod
@@ -65,6 +69,9 @@ class ModifiedEquinoctialElements(BaseModel):
         if v <= 0:
             raise ValueError(f"Semilatus rectum must be strictly greater than 0. Got {v}.")
         return v
+
+    def as_array(self):
+        return np.array([self.p_km, self.f, self.g, self.h, self.k])
 
 def keplerian2equinoctial(kep: KeplerianElements) -> EquinoctialElements:
     """
@@ -392,3 +399,88 @@ def cartesian2keplerian(x: np.ndarray, mu_km3_s2: float) -> tuple[KeplerianEleme
                             om_rad = om_rad)
 
     return kep, nu_rad
+
+def mee_motion(me: ModifiedEquinoctialElements, L_rad: float, p_rsw_m2_s2: np.ndarray, mu_km3_s2: float) -> np.ndarray:
+    """
+    Given an orbital state described by MEEs and any perturbations in the Radial-Cross-track-Along-track frame (RSW),
+    determine the time rate of change of these elements.
+
+    Arguments:
+    me:             [ModifiedEquinoctialElements] Modified equinoctial elements describing the orbit.
+    L_rad:          [float] True longitude {Om + om + nu}
+    p_rsw_m2_s2:    [np.ndarray] (3x1) Vector of summed perturbing accelerations in the RSW frame.
+    mu_km3_s2:      [float] Gravitational parameter of the primary body.
+    """
+    
+    # Auxiliary variables
+    qx = 1 + me.f * np.cos(L_rad) + me.g * np.sin(L_rad)
+    s2 = 1 + me.h**2 + me.k**2
+    p_mu = np.sqrt(me.p_km / mu_km3_s2)
+
+    # Equations of motion
+    pdot_km_s = p_mu * 2 * (me.p_km / qx) * p_rsw_m2_s2[1]
+
+    fdot__s = p_mu * (np.sin(L_rad) * p_rsw_m2_s2[0])\
+            + (1 / qx) * ((qx + 1) * np.cos(L_rad) + me.f) * p_rsw_m2_s2[1]\
+            - (me.g / qx) * (me.h * np.sin(L_rad) - me.k * np.cos(L_rad) * p_rsw_m2_s2[2])
+
+    gdot__s = p_mu * (-np.cos(L_rad) * p_rsw_m2_s2[0])\
+            + (1 / qx) * ((qx + 1) * np.sin(L_rad) + me.g) * p_rsw_m2_s2[1]\
+            + (me.f / qx) * (me.h * np.sin(L_rad) - me.k * np.cos(L_rad) * p_rsw_m2_s2[2])
+
+    hdot__s = p_mu * ((s2 * np.cos(L_rad)) / (2 * qx)) * p_rsw_m2_s2[2]
+
+    kdot__s = p_mu * ((s2 * np.sin(L_rad)) / (2 * qx)) * p_rsw_m2_s2[2]
+
+    Ldot_rad_s = np.sqrt(mu_km3_s2 * me.p_km) * (qx / me.p_km)**2\
+            + p_mu * (1 / qx) * (me.h * np.sin(L_rad) - me.k * np.cos(L_rad)) * p_rsw_m2_s2[2]
+
+    medot = np.array([pdot_km_s, fdot__s, gdot__s, hdot__s, kdot__s, Ldot_rad_s])
+
+    return medot
+
+def cowell_motion(x: np.ndarray, p_m2_s2: np.ndarray):
+    """
+    Calculate the orbital motion of a Cartesian state using Cowell's method.
+
+    Arguments:
+    x:      (np.ndarray) (6x1) Orbital state vector.
+    p_m2_s2 (np.ndarray) (3x1) Perturbing accelerations.
+
+    Returns:
+    xdot:   (np.ndarray) (6x1) Orbit motion.
+    """
+    #TODO: Implementation
+    xdot = np.array([0., 0., 0., 0., 0., 0.])
+    return xdot
+
+def encke_motion(x: np.ndarray):
+    """
+    Calculate the orbital motion of a Cartesian state using Encke's method.
+
+    Arguments:
+    x:      (np.ndarray) (6x1) Orbital state vector.
+    p_m2_s2 (np.ndarray) (3x1) Perturbing accelerations.
+
+    Returns:
+    xdot:   (np.ndarray) (6x1) Orbit motion.
+    """
+    # TODO: Implementation
+    xdot = np.array([0., 0., 0., 0., 0., 0.])
+    return xdot
+
+def propagate_sgp4(tle: str, t: float):
+    """
+    Propagate an orbit from an initial state given by a TLE using SGP4.
+
+    Arguments:
+    tle:    (str) Two Line Element set describing the orbital state at a specified epoch.
+    t:      (float) Time to retrieve orbital state vector.
+
+    Returns:
+    x:      (np.ndarray) Orbital state at specified time.
+    """
+    #TODO: Appropriate time specification (time since periapsis? epoch time?)
+    #TODO: SGP4 implementation
+    x = np.array([0., 0., 0., 0., 0., 0.])
+    return x
