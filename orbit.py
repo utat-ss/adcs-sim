@@ -303,6 +303,37 @@ def time2true_anom(a_km: float, e: float, mu_km3_s2: float, dt_s: float) -> floa
     nu_rad = ecc_anom2true_anom(E_rad, e)
     return nu_rad
 
+def epoch2time_since_periapsis(
+        target_epoch_j2000_d: float,
+        reference_epoch_j2000_d: float,
+        kep_elements: KeplerianElements,
+        reference_nu_rad: float,
+        mu_km3_s2: float) -> float:
+    """
+    Convert target epoch time to time since the most recent passage of periapsis.
+
+    Arguments:
+    target_epoch_j2000_d:      [float] Target epoch, in days since J2000.
+    reference_epoch_j2000_d:   [float] Epoch where the orbital state is known, in days since J2000.
+    kep_elements:              [KeplerianElements] Orbit elements at the reference epoch.
+    reference_nu_rad:          [float] True anomaly at the reference epoch.
+    mu_km3_s2:                 [float] Gravitational parameter of the primary body.
+
+    Returns:
+    dt_s:                      [float] Time since most recent passage of periapsis.
+    """
+    T_s = get_orbit_period(kep_elements.a_km, mu_km3_s2)
+    n_rad_s = period2mean_motion(T_s)
+
+    E_rad = true_anom2ecc_anom(kep_elements.e, reference_nu_rad)
+    M_rad = ecc_anom2mean_anom(E_rad, kep_elements.e) % (2 * np.pi)
+
+    reference_dt_s = M_rad / n_rad_s
+    epoch_dt_s = (target_epoch_j2000_d - reference_epoch_j2000_d) * 86400
+    dt_s = (reference_dt_s + epoch_dt_s) % T_s
+
+    return dt_s
+
 def get_ang_momentum(a_km: float, e: float, mu_km3_s2: float) -> float:
     """
     Calculate an orbit's angular momentum using shape parameters.
