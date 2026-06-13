@@ -8,7 +8,7 @@ import numpy as np
 import math
 import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
-from test_attitude import Jinv
+from test import Jinv
 
 
 # TODO: Doc strings explaining what the functions do, what their inputs are, and what their outputs are. Refer to virtual-sensors branch for some examples.
