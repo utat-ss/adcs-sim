@@ -320,7 +320,7 @@ def epoch2time_since_periapsis(
     mu_km3_s2:                 [float] Gravitational parameter of the primary body.
 
     Returns:
-    dt_s:                      [float] Time since most recent passage of periapsis.
+    target_dt_s:               [float] Time since most recent passage of periapsis.
     """
     T_s = get_orbit_period(kep_elements.a_km, mu_km3_s2)
     n_rad_s = period2mean_motion(T_s)
@@ -330,9 +330,9 @@ def epoch2time_since_periapsis(
 
     reference_dt_s = M_rad / n_rad_s
     epoch_dt_s = (target_epoch_j2000_d - reference_epoch_j2000_d) * 86400
-    dt_s = (reference_dt_s + epoch_dt_s) % T_s
+    target_dt_s = (reference_dt_s + epoch_dt_s) % T_s
 
-    return dt_s
+    return target_dt_s
 
 def get_ang_momentum(a_km: float, e: float, mu_km3_s2: float) -> float:
     """
