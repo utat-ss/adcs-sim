@@ -30,6 +30,7 @@ codegen/
 *.slxc
 __pycache__/
 .pytest_cache/
+*.egg*
 
 # Cloud based storage dotfile
 .MATLABDriveTag
@@ -40,3 +41,6 @@ __pycache__/
 # SimBiology backup files
 *.sbproj.backup
 *.sbproj.bak
+
+# Environments
+.venv
