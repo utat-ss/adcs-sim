@@ -21,7 +21,8 @@ def GC_distance(lat_1, long_1, lat_2, long_2, center_dist):
     hav_theta = VirtualGNSS.haversine(delta_lat) + math.cos(lat_1 * math.pi / 180) * math.cos(lat_2 * math.pi / 180) * VirtualGNSS.haversine(delta_long)
 
     return 2 * math.asin(hav_theta**0.5) * center_dist
-    
+
+
 def Euc_distance(lat_1, long_1, center_dist_1, lat_2, long_2, center_dist_2):
     """
     Compute Euclidean distance between two different pairs of coordinates (geocentric latitude).
@@ -50,6 +51,7 @@ def test_loads_config():
     assert "GPS" in gnss.compatible_satellites
     assert gnss.LLA_cov_matrix_meters.shape == (3, 3)
 
+
 def test_rejects_invalid_latitude_inputs():
     gnss = VirtualGNSS(GNSS_CFG)
 
@@ -57,6 +59,7 @@ def test_rejects_invalid_latitude_inputs():
         gnss.measure([-91, 0, 10000])
     with pytest.raises(ValueError):
         gnss.measure([91, 0, 10000])
+
 
 def test_rejects_invalid_longitude_inputs():
     gnss = VirtualGNSS(GNSS_CFG)
@@ -69,11 +72,13 @@ def test_rejects_invalid_longitude_inputs():
     with pytest.raises(ValueError):
         gnss.measure([0, 181, 10000])
 
+
 def test_rejects_invalid_altitude_inputs():
     gnss = VirtualGNSS(GNSS_CFG)
 
     with pytest.raises(ValueError):
         gnss.measure([0, 0, 0])
+
 
 def test_produces_valid_position_outputs():
     gnss = VirtualGNSS(GNSS_CFG)
