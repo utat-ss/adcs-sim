@@ -387,9 +387,9 @@ class VirtualGNSS(VirtualSensor):
         return (math.sin(x/2))**2
     
     @staticmethod
-    def GC_distance(lat_1, long_1, lat_2, long_2, altitude):
+    def GC_distance(lat_1, long_1, lat_2, long_2, center_dist):
         """
-        Compute distance along a great circle between two given pairs of coordinates. 
+        Compute distance along a great circle between two given pairs of coordinates (geocentric latiude). 
 
         Note: For testing purposes - feel free to move elsewhere in code base. The average GC_distance
         between true input coords and a sufficient set of output LLA coords using measure() should be ~2.13 m
@@ -400,12 +400,12 @@ class VirtualGNSS(VirtualSensor):
 
         hav_theta = VirtualGNSS.haversine(delta_lat) + math.cos(lat_1 * math.pi / 180) * math.cos(lat_2 * math.pi / 180) * VirtualGNSS.haversine(delta_long)
 
-        return 2 * math.asin(hav_theta**0.5) * altitude
+        return 2 * math.asin(hav_theta**0.5) * center_dist
     
     @staticmethod
-    def Euc_distance(lat_1, long_1, altitude_1, lat_2, long_2, altitude_2):
+    def Euc_distance(lat_1, long_1, center_dist_1, lat_2, long_2, center_dist_2):
         """
-        Compute Euclidean distance between two different pairs of coordinates.
+        Compute Euclidean distance between two different pairs of coordinates (geocentric latiude).
 
         Note: For testing purposes - feel free to move elsewhere in code base.
         """
@@ -414,24 +414,53 @@ class VirtualGNSS(VirtualSensor):
         theta_2_rad = math.pi / 2 - lat_2 * math.pi / 180
         long_2_rad = long_2 * math.pi / 180
 
-        x1 = altitude_1 * math.sin(theta_1_rad) * math.cos(long_1_rad)
-        x2 = altitude_2 * math.sin(theta_2_rad) * math.cos(long_2_rad)
+        x1 = center_dist_1 * math.sin(theta_1_rad) * math.cos(long_1_rad)
+        x2 = center_dist_2 * math.sin(theta_2_rad) * math.cos(long_2_rad)
 
-        y1 = altitude_1 * math.sin(theta_1_rad) * math.sin(long_1_rad)
-        y2 = altitude_2 * math.sin(theta_2_rad) * math.sin(long_2_rad)
+        y1 = center_dist_1 * math.sin(theta_1_rad) * math.sin(long_1_rad)
+        y2 = center_dist_2 * math.sin(theta_2_rad) * math.sin(long_2_rad)
 
-        z1 = altitude_1 * math.cos(theta_1_rad)
-        z2 = altitude_2 * math.cos(theta_2_rad)
+        z1 = center_dist_1 * math.cos(theta_1_rad)
+        z2 = center_dist_2 * math.cos(theta_2_rad)
 
         return math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2 + (z2 - z1) ** 2)
 
+    @staticmethod
+    def from_geodetic_LLA(input_coords, semi_major = 6378137.0, semi_minor = 6356752.314245):
+        """
+        Convert input coordinates from geodetic LLA (geodetic latitude, longitude, altitude) to geocentric LLA
+        with distance from Earth's center as the third coordinate (geocentric latitude, longitude, distance to Earth center).
+        Uses values for the semi-major and semi-minor axes of Earth's ellipsoid.
+        """
+        conv_factor = (semi_major ** 2) / (semi_minor ** 2)
+        geocentric_lat = math.atan(1/conv_factor * math.tan(input_coords[0] * math.pi / 180)) * 180 / math.pi
+
+        ellipsoid_height = semi_major * semi_minor / (math.sqrt(semi_minor**2 + (semi_major**2 - semi_minor**2) * (math.sin(geocentric_lat * math.pi / 180))**2))
+        dist_from_center = input_coords[2] + ellipsoid_height 
+
+        return (geocentric_lat, input_coords[1], dist_from_center)
+    
+    @staticmethod
+    def to_geodetic_LLA(input_coords, semi_major = 6378137.0, semi_minor = 6356752.314245):
+        """
+        Convert input coordinates to geodetic LLA (geodetic latitude, longitude, altitude) from geocentric LLA
+        with distance from Earth's center as the third coordinate (geocentric latitude, longitude, distance to Earth center).
+        Uses values for the semi-major and semi-minor axes of Earth's ellipsoid.
+        """
+        conv_factor = (semi_major ** 2) / (semi_minor ** 2)
+        geodetic_lat = math.atan(conv_factor * math.tan(input_coords[0] * math.pi / 180)) * 180 / math.pi
+
+        ellipsoid_height = semi_major * semi_minor / (math.sqrt(semi_minor**2 + (semi_major**2 - semi_minor**2) * (math.sin(input_coords[0] * math.pi / 180))**2))
+        actual_alt = input_coords[2] - ellipsoid_height 
+
+        return (geodetic_lat, input_coords[1], actual_alt)
+
     def measure(self, true_coords_LLA):
         """
-        Compute REC noisy positon output in LLA from input LLA coordinates, where 
-        altitude is defined as the distance to the center of the Earth (this definitation can be changed later if needed).
+        Compute REC noisy positon output in LLA from input LLA coordinates.
 
-        Note 1: contains conversion from standard LLA [latitude, longitude, altitude]
-        to modified LLA [latitude_meters, longitude_meters, altitude] and back to use known
+        Note 1: contains conversion from standard LLA (geodetic latitude, longitude, altitude)
+        to modified LLA (geocentric latitude (meters), longitude (meters), distance to Earth center (meters)) and back to use known
         covariance values.
 
         Note 2: should be accurate (in providing values with the desired randomness) for all valid positions
@@ -440,11 +469,11 @@ class VirtualGNSS(VirtualSensor):
         Arguments:
 
             :param true_coords_LLA:
-                True, standard LLA [latitude, longitude, altitude] coordinates of satellite.
+                True, standard LLA (geodetic latitude, longitude, altitude) coordinates of satellite.
                 Values must be in the range -90 <= latitude <= 90, -180 < longitude <= 180, and altitude > 0.
 
         Returns:
-            Noisy, standard LLA [latitude, longitude, altitude] coordinates of satellite. 
+            Noisy, standard LLA (geodetic latitude, longitude, altitude) coordinates of satellite. 
             Values should be in the range -90 <= latitude <= 90, -180 < longitude <= 180, and altitude > 0.
         """
         if len(true_coords_LLA) != 3:
@@ -458,46 +487,48 @@ class VirtualGNSS(VirtualSensor):
         
         if true_coords_LLA[2] <= 0.0:
             raise ValueError("Altitude value must be in the range altitude > 0.")
+        
+        true_coords_mod = self.from_geodetic_LLA(true_coords_LLA)
 
-        true_lat_rad = true_coords_LLA[0] * math.pi / 180
-        true_long_rad = true_coords_LLA[1] * math.pi / 180
-        true_alt = true_coords_LLA[2]
+        true_lat_rad = true_coords_mod[0] * math.pi / 180
+        true_long_rad = true_coords_mod[1] * math.pi / 180
+        true_dist = true_coords_mod[2]
 
-        lat_dist_m = true_lat_rad * true_alt
-        long_dist_m = true_long_rad * true_alt * math.cos(true_lat_rad)
+        lat_dist_m = true_lat_rad * true_dist
+        long_dist_m = true_long_rad * true_dist * math.cos(true_lat_rad)
 
         noise = np.random.multivariate_normal(np.zeros(3), self.LLA_cov_matrix_meters)
 
         noisy_lat_dist_m = lat_dist_m + noise[0]
         noisy_long_dist_m = long_dist_m + noise[1]
-        noisy_alt = true_alt + noise[2]
+        noisy_dist = true_dist + noise[2]
 
-        noisy_coords_LLA = np.zeros(3)
-        noisy_lat_rad = noisy_lat_dist_m / true_alt 
-        noisy_coords_LLA[0] = (180 * noisy_lat_rad) / math.pi
+        noisy_coords_mod = np.zeros(3)
+        noisy_lat_rad = noisy_lat_dist_m / true_dist
+        noisy_coords_mod[0] = (180 * noisy_lat_rad) / math.pi
 
         buff = 0.00000001
-        if true_lat_rad < math.pi/2 - buff and true_lat_rad > -math.pi/2 + buff: # handling edge case
+        if true_lat_rad < math.pi/2 - buff and true_lat_rad > -math.pi/2 + buff: # Handling edge case
             true_cos_val = math.cos(true_lat_rad)
-            noisy_coords_LLA[1] = (180 * noisy_long_dist_m) / (math.pi * true_alt * true_cos_val) 
+            noisy_coords_mod[1] = (180 * noisy_long_dist_m) / (math.pi * true_dist * true_cos_val) 
         else:
-            noisy_coords_LLA[1] = 0.0
-        noisy_coords_LLA[2] = noisy_alt
+            noisy_coords_mod[1] = 0.0
+        noisy_coords_mod[2] = noisy_dist
 
         # Ensuring output is within intended range
 
-        if noisy_coords_LLA[0] > 90.0:
-            noisy_coords_LLA[0] = 180.0 - noisy_coords_LLA[0]
-            noisy_coords_LLA[1] += 180.0
+        if noisy_coords_mod[0] > 90.0:
+            noisy_coords_mod[0] = 180.0 - noisy_coords_mod[0]
+            noisy_coords_mod[1] += 180.0
 
-        if noisy_coords_LLA[0] < -90.0:
-            noisy_coords_LLA[0] = -180.0 - noisy_coords_LLA[0]
-            noisy_coords_LLA[1] += 180.0
+        if noisy_coords_mod[0] < -90.0:
+            noisy_coords_mod[0] = -180.0 - noisy_coords_mod[0]
+            noisy_coords_mod[1] += 180.0
             
-        while noisy_coords_LLA[1] > 180.0:
-            noisy_coords_LLA[1] -= 360.0
+        while noisy_coords_mod[1] > 180.0:
+            noisy_coords_mod[1] -= 360.0
         
-        while noisy_coords_LLA[1] <= -180.0:
-            noisy_coords_LLA[1] += 360.0
+        while noisy_coords_mod[1] <= -180.0:
+            noisy_coords_mod[1] += 360.0
             
-        return noisy_coords_LLA
+        return self.to_geodetic_LLA(noisy_coords_mod)
