@@ -385,45 +385,7 @@ class VirtualGNSS(VirtualSensor):
         Helper function for GC_distance. Computes haversine of a given input x.
         """
         return (math.sin(x/2))**2
-    
-    @staticmethod
-    def GC_distance(lat_1, long_1, lat_2, long_2, altitude):
-        """
-        Compute distance along a great circle between two given pairs of coordinates. 
 
-        Note: For testing purposes - feel free to move elsewhere in code base. The average GC_distance
-        between true input coords and a sufficient set of output LLA coords using measure() should be ~2.13 m
-        based on the 2.0 CEP accuracy of the Orion B16 Receiver.
-        """
-        delta_lat = (lat_2 - lat_1) * math.pi / 180
-        delta_long = (long_2 - long_1) * math.pi / 180
-
-        hav_theta = VirtualGNSS.haversine(delta_lat) + math.cos(lat_1 * math.pi / 180) * math.cos(lat_2 * math.pi / 180) * VirtualGNSS.haversine(delta_long)
-
-        return 2 * math.asin(hav_theta**0.5) * altitude
-    
-    @staticmethod
-    def Euc_distance(lat_1, long_1, altitude_1, lat_2, long_2, altitude_2):
-        """
-        Compute Euclidean distance between two different pairs of coordinates.
-
-        Note: For testing purposes - feel free to move elsewhere in code base.
-        """
-        theta_1_rad = math.pi / 2 - lat_1 * math.pi / 180
-        long_1_rad = long_1 * math.pi / 180
-        theta_2_rad = math.pi / 2 - lat_2 * math.pi / 180
-        long_2_rad = long_2 * math.pi / 180
-
-        x1 = altitude_1 * math.sin(theta_1_rad) * math.cos(long_1_rad)
-        x2 = altitude_2 * math.sin(theta_2_rad) * math.cos(long_2_rad)
-
-        y1 = altitude_1 * math.sin(theta_1_rad) * math.sin(long_1_rad)
-        y2 = altitude_2 * math.sin(theta_2_rad) * math.sin(long_2_rad)
-
-        z1 = altitude_1 * math.cos(theta_1_rad)
-        z2 = altitude_2 * math.cos(theta_2_rad)
-
-        return math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2 + (z2 - z1) ** 2)
 
     def measure(self, true_coords_LLA):
         """
