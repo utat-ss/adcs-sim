@@ -341,7 +341,34 @@ class VirtualMTM(VirtualSensor):
         """
         with open(cfg_file, 'r') as f:
             raise NotImplementedError()
+            
+    def measure(self, quat, mtm_vector_body, R_BS):
 
+        #convert ECI to sensor frame
+        mtm_vector_body = np.asarray(mtm_vector_body, dtype = float)
+        if mtm_vector_body.shape!= (3,):
+            raise ValueError("mtm_vector_body must be a 3D vector")
+        
+        R_BS = np.asarray(R_BS, dtype = float)
+        if R_BS.shape != (3,3):
+            raise ValueError("R_BS must be a 3x3 matrix")
+        
+        mtm_sensor_vector = R_BS @ mtm_vector_body
+
+        #add noise
+        noise = np.random.normal(0,1,3)
+        mtm_sensor_vector += noise
+
+        #check it hasn't reached limits of what it can measure
+        mtm_sensor_vector = np.clip(mtm_sensor_vector, self.lims_ut[0], self.lims_ut[1])
+
+        #add bias (hard iron)
+        mtm_sensor_vector += self.bias_ut
+
+        #add soft iron
+        mtm_sensor_vector = self.soft_iron @ mtm_sensor_vector
+
+        return mtm_sensor_vector
 
 class VirtualGNSS(VirtualSensor):
     """
