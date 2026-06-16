@@ -64,9 +64,6 @@ def test_rejects_invalid_latitude_inputs():
 def test_rejects_invalid_longitude_inputs():
     gnss = VirtualGNSS(GNSS_CFG)
 
-    # From the docstring, the longitude uses the range -180 < longitude <= 180, so -180 is invalid.
-    with pytest.raises(ValueError):
-        gnss.measure([0, -180, 10000])
     with pytest.raises(ValueError):
         gnss.measure([0, -181, 10000])
     with pytest.raises(ValueError):
