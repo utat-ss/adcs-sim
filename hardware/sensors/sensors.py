@@ -470,7 +470,7 @@ class VirtualGNSS(VirtualSensor):
 
             :param true_coords_LLA:
                 True, standard LLA (geodetic latitude, longitude, altitude) coordinates of satellite.
-                Values must be in the range -90 <= latitude <= 90, -180 < longitude <= 180, and altitude > 0.
+                Values must be in the range -90 <= latitude <= 90, -180 <= longitude <= 180, and altitude > 0.
 
         Returns:
             Noisy, standard LLA (geodetic latitude, longitude, altitude) coordinates of satellite. 
@@ -483,7 +483,7 @@ class VirtualGNSS(VirtualSensor):
             raise ValueError("Latitude value must be in the range -90 <= latitude <= 90.")
         
         if true_coords_LLA[1] < -180.0 or true_coords_LLA[1] > 180.0:
-            raise ValueError("Longitude value must be in the range -180 < longitude <= 180.")
+            raise ValueError("Longitude value must be in the range -180 <= longitude <= 180.")
         
         if true_coords_LLA[2] <= 0.0:
             raise ValueError("Altitude value must be in the range altitude > 0.")
