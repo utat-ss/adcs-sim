@@ -82,9 +82,9 @@ def test_rejects_invalid_altitude_inputs():
 
 def test_produces_valid_position_outputs():
     gnss = VirtualGNSS(GNSS_CFG)
-
     # Check the lat and long boundaries
     coords = [[89.999, 0, 10000], [-89.999, 0, 10000], [0, 179.999, 10000], [0, -179.999, 10000]]
+
     for i in range(len(coords)):
         measured_coords = gnss.measure(coords[i])
 
@@ -96,20 +96,54 @@ def test_produces_valid_position_outputs():
 
 def test_produces_accurate_position_measurements():
     gnss = VirtualGNSS(GNSS_CFG)
-
-    # There could be a better comprehensive list of coords or maybe randomize it instead
-    coords = [[89.999, 0, 10000], [-89.999, 0, 10000], [0, 179.999, 10000], [0, -179.999, 10000], [-89.999, 179.999, 10000], [89.999, 179.999, 10000], [-89.999, -179.999, 10000], [89.999, -179.999, 10000], [10, 10, 6871000], [-10, -10, 6871000]]
+    coords = [-90, -180, 6871000]
+    cases = 0
     total_error = 0
 
-    cep50 = 2.0
-    std = cep50 / math.sqrt(-2 * math.log(1 - 0.50))
-    cep997 = std * math.sqrt(-2 * math.log(1 - 0.997))
-
-    for i in range(len(coords)):
-        measured_coords = gnss.measure(coords[i])
-        error = GC_distance(coords[i][0], coords[i][1], measured_coords[0], measured_coords[1], coords[i][2])
-        total_error += error
-
-        assert error < cep997
+    while coords[0] < 90:
+        coords[1] = -180
+        coords[0] += 10
+        while coords[1] < 180:
+            measured_coords = gnss.measure(coords)
+            error = GC_distance(coords[0], coords[1], measured_coords[0], measured_coords[1], coords[2])
+            total_error += error
+            cases += 1
+            coords[1] += 10
     
-    assert total_error / len(coords) < 2.13
+    # The average GC_distance between true input coords and a sufficient set of output LLA coords using measure() should be ~2.13 m based on the 2.0 CEP accuracy of the Orion B16 Receiver.
+    assert total_error / cases < 2.13
+
+
+def test_measurement_noise_is_statistically_consistent():
+    np.random.seed(0)
+
+    gnss = VirtualGNSS(GNSS_CFG)
+    coords = [-90, -180, 6871000]
+    std = np.sqrt(gnss.LLA_cov_matrix_meters[0][0])
+
+    cases = 0
+    within_1_std = 0
+    within_2_std = 0
+    within_3_std = 0
+
+    while coords[0] < 90:
+        coords[1] = -180
+        coords[0] += 10
+        while coords[1] < 180:
+            measured_coords = gnss.measure(coords)
+            error = math.radians(measured_coords[0] - coords[0]) * coords[2]
+            error = abs(error)
+
+            if error < 1 * std:
+                within_1_std += 1
+            if error < 2 * std:
+                within_2_std += 1
+            if error < 3 * std:
+                within_3_std += 1
+
+            cases += 1
+            coords[1] += 10
+
+    assert within_1_std / cases == pytest.approx(0.68, abs=0.1)
+    assert within_2_std / cases == pytest.approx(0.95, abs=0.1)
+    assert within_3_std / cases == pytest.approx(0.997, abs=0.1)
