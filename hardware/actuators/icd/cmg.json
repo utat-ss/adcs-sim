@@ -1,0 +1,9 @@
+{
+  "type": "CMG",
+  "model": "CMG-10m",
+  "max_momentum_generated": 13 // mNms on x, y, axis
+  "min_torque":
+  "max_torque":
+  "moi":
+  "max_current":
+}

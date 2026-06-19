@@ -1,0 +1,9 @@
+{
+  "type": "MTQ",
+  "model": "ADCS-MTQ",
+  "magnetic_dipole_moment_xy": 0.2 // Am^2
+  "magnetic_dipole_moment_z": 0.1 //Am^2
+  "max_current": 
+  "turns":
+  "area_vector":
+}
