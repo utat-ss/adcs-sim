@@ -5,11 +5,7 @@ import numpy as np
 import pytest
 
 from hardware.sensors.sensors import VirtualGNSS
-from hardware.utils import (
-    euclidean_distance_geocentric_lla,
-    great_circle_distance_geocentric_lla,
-    haversine,
-)
+from hardware.utils import great_circle_distance_geocentric_lla
 
 
 GNSS_CFG = Path("hardware/sensors/icd/gnss/orion_b16.json")
@@ -93,10 +89,10 @@ def test_produces_accurate_position_measurements():
             coords_geodetic[1] += 10
     
     # The average great circle distance between true input coords and a sufficient set of output LLA coords using measure() should be ~2.13 m based on the 2.0 CEP accuracy of the Orion B16 Receiver.
-    horizontal_sigma_m = math.sqrt(gnss.LLA_cov_matrix_meters[0][0])
-    expected_mean_horizontal_error_m = horizontal_sigma_m * math.sqrt(math.pi / 2)
+    sigma = math.sqrt(gnss.LLA_cov_matrix_meters[0][0])
+    expected_mean_error = sigma * math.sqrt(math.pi / 2)
 
-    assert total_error / cases < expected_mean_horizontal_error_m + 0.1
+    assert total_error / cases < expected_mean_error + 0.1
 
 
 def test_measurement_noise_is_statistically_consistent():
