@@ -380,13 +380,6 @@ class VirtualGNSS(VirtualSensor):
         self.LLA_cov_matrix_meters = np.asarray(cfg["LLA_cov_matrix_meters"], dtype=float)
 
     @staticmethod
-    def haversine(x):
-        """
-        Helper function for GC_distance. Computes haversine of a given input x.
-        """
-        return (math.sin(x/2))**2
-
-    @staticmethod
     def from_geodetic_LLA(input_coords, semi_major = 6378137.0, semi_minor = 6356752.314245):
         """
         Convert input coordinates from geodetic LLA (geodetic latitude, longitude, altitude) to geocentric LLA
