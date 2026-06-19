@@ -79,7 +79,14 @@ class VirtualMTQ(VirtualActuator):
     Generic magnetorquer class.
     """
 
-    def command(self, input: np.ndarray) -> np.ndarray:
+    def command(self, geomagnetic_vector: np.ndarray, N, current: np.ndarray, A) -> np.ndarray:
+        """what controller gives torque value -> how much torque it actually gives in sensor how it actually responds"""
+        """input should be current -> geomanetic field vector x current x cross product of dipole moment
+          -> what the dipole moment it puts out"""
+        """ non linear relation between"""
+
         """Input current, output magnetic field / torque vector in sensor frame"""
+        tau = np.cross(geomagnetic_vector,  N*current*A)
+        return tau
 
-
+    # TODO: linear model between current and output, require nominal dipole moment info from tensor tech
