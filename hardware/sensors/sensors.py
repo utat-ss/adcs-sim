@@ -41,7 +41,7 @@ class VirtualFSS(VirtualSensor):
         self.rate_hz: float = 0.0  # Data rate [Hz]
         self.cov_deg2: np.ndarray = np.zeros((2, 2), dtype=float)  # Measurement covariance (2x2) [deg^2]
         self._load_cfg(cfg_file)
- 
+
     def _load_cfg(self, cfg_file: Path):
         """
         Populate FSS parameters using a configuration file.
@@ -52,9 +52,15 @@ class VirtualFSS(VirtualSensor):
         Returns:
         None
         """
-        # TODO: Config file format
-        with open(cfg_file, 'r') as f:
-            raise NotImplementedError()
+        cfg_file = Path(cfg_file)
+        if not cfg_file.exists():
+            raise FileNotFoundError(f"STR config file not found: {cfg_file}")
+        with open(cfg_file, "r") as f:
+            cfg = json.load(f)
+        self.model = str(cfg.get("model", self.model))
+        self.fov_rad = float(cfg["fov_hcone_deg"])
+        self.rate_hz = float(cfg["rate_hz"])
+        self.cov_deg2 = np.zeros(cfg["cov_deg2"], dtype=float)
 
     def _angle_computation(self, incident_light_sensor: np.ndarray):
         """
