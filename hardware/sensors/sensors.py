@@ -197,10 +197,10 @@ class VirtualSTR(VirtualSensor):
             cfg = json.load(f)
 
         self.model = str(cfg.get("model", self.model))
-        self.fov_rad = float(cfg["fov_rad"])
-        self.exclusion_rad = float(cfg["exclusion_rad"])
+        self.fov_rad = float(cfg["fov_full_cone_rad"])
+        self.exclusion_rad = float(cfg["exclusion_full_cone_rad"])
         self.rate_hz = float(cfg["rate_hz"])
-        self.cov_rad2 = np.asarray(cfg["cov_rad2"], dtype=float)
+        self.cov_rad2 = np.asarray(cfg["cov_matrix_rad2"], dtype=float)
         self.cov_diag = np.diag(self.cov_rad2)
 
     @staticmethod
@@ -349,7 +349,7 @@ class VirtualGNSS(VirtualSensor):
     """
 
     def __init__(self, cfg_file: Path):
-        self.type: str = "REC"
+        self.type: str = "GNSS"
         self.model: str = "Generic GNSS"
         self.compatible_satellites: str = ""
 
@@ -359,7 +359,7 @@ class VirtualGNSS(VirtualSensor):
 
     def _load_cfg(self, cfg_file: Path):
         """
-        Populate GNSS/REC parameters using a configuration file.
+        Populate GNSS parameters using a configuration file.
 
         Arguments:
         cfg_file:   (Path) Path to the configuration file for the GNSS model to be used.
