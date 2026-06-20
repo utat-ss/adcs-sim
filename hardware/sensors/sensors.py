@@ -4,6 +4,7 @@ from pathlib import Path
 import json
 import numpy as np
 from abc import ABC, abstractmethod
+from utils.conversions import quatToRotationMatrix
 
 import math
 
@@ -342,18 +343,22 @@ class VirtualMTM(VirtualSensor):
         with open(cfg_file, 'r') as f:
             raise NotImplementedError()
             
-    def measure(self, quat, mtm_vector_body, R_BS):
-
-        #convert ECI to sensor frame
-        mtm_vector_body = np.asarray(mtm_vector_body, dtype = float)
-        if mtm_vector_body.shape!= (3,):
-            raise ValueError("mtm_vector_body must be a 3D vector")
+    def measure(self, quat, mtm_vector_eci, R_BS):
+        #ECI to body frame
+        quatRotMatrix = quatToRotationMatrix(quat)
+        
+        mtm_vector_eci = np.asarray(mtm_vector_eci, dtype = float)
+        if mtm_vector_eci.shape!= (3,):
+            raise ValueError("mtm_vector_eci must be a 3D vector")
         
         R_BS = np.asarray(R_BS, dtype = float)
         if R_BS.shape != (3,3):
             raise ValueError("R_BS must be a 3x3 matrix")
         
-        mtm_sensor_vector = R_BS @ mtm_vector_body
+        mtm_body_vector = quatRotMatrix @ mtm_vector_eci
+        
+        #convert body to sensor frame
+        mtm_sensor_vector = R_BS @ mtm_body_vector
 
         #add noise
         noise = np.random.normal(0,1,3)
@@ -369,6 +374,7 @@ class VirtualMTM(VirtualSensor):
         mtm_sensor_vector = self.soft_iron @ mtm_sensor_vector
 
         return mtm_sensor_vector
+
 
 class VirtualGNSS(VirtualSensor):
     """
