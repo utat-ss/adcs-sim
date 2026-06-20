@@ -264,7 +264,7 @@ class VirtualSTR(VirtualSensor):
 
         return np.array([xyz[0], xyz[1], xyz[2], w], dtype=float)
 
-    def measure_attitude(self, q_true: np.ndarray) -> np.ndarray:
+    def measure(self, q_true: np.ndarray) -> np.ndarray:
         """
         Return noisy measured attitude quaternion.
 
