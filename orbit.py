@@ -1,0 +1,528 @@
+# Handle any calculations relating to orbital mechanics
+
+from pydantic import BaseModel, field_validator, model_validator, ValidationInfo
+import numpy as np
+
+class KeplerianElements(BaseModel):
+    """
+    Set of Keplerian Elements for a specified orbit.
+    """
+    a_km: float     # semi-major axis [km]
+    e: float        # eccentricity
+    i_rad: float    # inclination [rad]
+    Om_rad: float   # right ascension of the ascending node [rad]
+    om_rad: float   # argument of periapsis [rad]
+
+    @field_validator("i_rad", "Om_rad", "om_rad")
+    @classmethod
+    def angle_in_range(cls, v: float, info: ValidationInfo):
+        """
+        Check if angular values are within range 0-360 degrees. Does not stop values outside this range or wrap them, but
+        users are encouraged to ensure values are wrapped.
+        """
+        if v < 0 or v >= 2 * np.pi:
+            print(f"Warning: angular value outside range. Should be 0 <= {info.field_name} < 2pi rad, got {v} rad.")
+        return v
+
+    @field_validator("e")
+    @classmethod
+    def eccentricity_positive(cls, v: float):
+        """
+        Ensures eccentricity value is positive.
+        """
+        if v < 0:
+            raise ValueError(f"Eccentricity must be greater than or equal to 0. Got {v}.")
+        return v
+
+    def as_array(self):
+        return np.array([self.a_km, self.e, self.i_rad, self.Om_rad, self.om_rad])
+
+class EquinoctialElements(BaseModel):
+    """
+    Set of Equinoctial Elements for a specified orbit.
+    """
+    a_km: float     # semi-major axis [km]
+    h: float        # eccentricity vector y {e sin(Om + om)}
+    k: float        # eccentricity vector x {e cos(Om + om)}
+    p: float        # orientation vector y {tan(i/2) sin(Om)}
+    q: float        # orientation vector x {tan(i/2) cos(Om)}
+
+    def as_array(self):
+        return np.array([self.a_km, self.h, self.k, self.p, self.q])
+
+class ModifiedEquinoctialElements(BaseModel):
+    """
+    Set of Modified Equinoctial Elements for a specified orbit.
+    """
+    p_km: float     # semilatus rectum {a (1 - e^2)} [km]
+    f: float        # eccentricity vector x {e cos(om + Om)}
+    g: float        # eccentricity vector y {e sin(om + Om)}
+    h: float        # orientation vector y {tan(i/2) sin(Om)}
+    k: float        # orientation vector x {tan(i/2) cos(Om)}
+
+    @field_validator("p_km")
+    @classmethod
+    def semilatus_rectum_positive(cls, v: float):
+        """
+        Ensures the semilatus rectum is strictly positive.
+        """
+        if v <= 0:
+            raise ValueError(f"Semilatus rectum must be strictly greater than 0. Got {v}.")
+        return v
+
+    def as_array(self):
+        return np.array([self.p_km, self.f, self.g, self.h, self.k])
+
+def keplerian2equinoctial(kep: KeplerianElements) -> EquinoctialElements:
+    """
+    Convert Keplerian Elements to Equinoctial Elements.
+    """
+    pericenter_rad = kep.Om_rad + kep.om_rad
+    half_inc_rad = kep.i_rad / 2
+
+    h = kep.e * np.sin(pericenter_rad)
+    k = kep.e * np.cos(pericenter_rad)
+    p = np.tan(half_inc_rad) * np.sin(kep.Om_rad)
+    q = np.tan(half_inc_rad) * np.cos(kep.Om_rad)
+    
+    eq = EquinoctialElements(a_km = kep.a_km,
+                             h = h,
+                             k = k,
+                             p = p,
+                             q = q)
+    return eq
+
+def keplerian2mee(kep: KeplerianElements) -> ModifiedEquinoctialElements:
+    """
+    Convert Keplerian Elements to Modified Equinoctial Elements.
+    """
+    pericenter_rad = kep.Om_rad + kep.om_rad
+    half_inc_rad = kep.i_rad / 2
+
+    p_km = kep.a_km * (1 - kep.e**2)
+    f = kep.e * np.cos(pericenter_rad)
+    g = kep.e * np.sin(pericenter_rad)
+    h = np.tan(half_inc_rad) * np.sin(kep.Om_rad)
+    k = np.tan(half_inc_rad) * np.cos(kep.Om_rad)
+
+    me = ModifiedEquinoctialElements(p_km = p_km,
+                                     f = f,
+                                     g = g,
+                                     h = h,
+                                     k = k)
+    return me
+
+def equinoctial2keplerian(eq: EquinoctialElements) -> KeplerianElements:
+    """
+    Convert Equinoctial elements to Keplerian Elements.
+    """
+    e = np.sqrt(eq.h**2 + eq.k**2)
+    i_rad = 2 * np.arctan(np.sqrt(eq.p**2 + eq.q**2))
+    Om_rad = np.atan2(eq.p, eq.q)
+    om_rad = np.atan2(eq.h, eq.k) - Om_rad
+
+    kep = KeplerianElements(a_km = eq.a_km,
+                            e = e,
+                            i_rad = i_rad,
+                            Om_rad = Om_rad,
+                            om_rad = om_rad)
+
+def mee2keplerian(me: ModifiedEquinoctialElements) -> KeplerianElements:
+    """
+    Convert Modified Equinoctial Elements to Keplerian Elements.
+    """
+    e = np.sqrt(me.f**2 + me.g**2)
+    a_km = me.p_km / (1 - e**2)
+    i_rad = 2 * np.arctan(np.sqrt(me.h**2 + me.k**2))
+    Om_rad = np.atan2(me.k, me.h)
+    om_rad = np.atan2(me.g, me.f) - Om_rad
+
+    kep = KeplerianElements(a_km = a_km,
+                            e = e,
+                            i_rad = i_rad,
+                            Om_rad = Om_rad,
+                            om_rad = om_rad)
+    return kep
+
+def equinoctial2mee(eq: EquinoctialElements) -> ModifiedEquinoctialElements:
+    """
+    Convert Equinoctial Elements to Modified Equinoctial Elements.
+    """
+    e = np.sqrt(eq.h**2 + eq.k**2)
+    p_km = eq.a_km * (1 - e**2)
+
+    me = ModifiedEquinoctialElements(p_km = p_km,
+                                     f = eq.h,
+                                     g = eq.k,
+                                     h = eq.p,
+                                     k = eq.q)
+    return me
+
+def mee2equinoctial(me: ModifiedEquinoctialElements) -> EquinoctialElements:
+    """
+    Convert Modified Equinoctial Elements to Equinoctial Elements.
+    """
+    e = np.sqrt(me.f**2 + me.g**2)
+    a_km = me.p_km / (1 - e**2)
+
+    eq = EquinoctialElements(a_km = a_km,
+                             h = me.f,
+                             k = me.g,
+                             p = me.h,
+                             q = me.k)
+    return eq
+
+def true_anom2radius(nu_rad: float, a_km:float, e: float) -> float:
+    """
+    Calculate the orbit radius at a given true anomaly.
+
+    Arguments:
+    nu_rad:     [float] True anomaly.
+    a_km:       [float] Semi-major axis.
+    e:          [float] Eccentricity.
+
+    Returns:
+    r_km:       [float] Orbit radius.
+    """
+    r_km = a_km * (1 - e**2) / (1 + e * np.cos(nu_rad))
+    return r_km
+
+def get_orbit_period(a_km: float, mu_km3_s2: float) -> float:
+    """
+    Calculate an orbit's period given the semi-major axis around some primary body.
+
+    Arguments:
+    a_km:       [float] Semi-major axis.
+    mu_km3_s2:  [float] Gravitational parameter of the primary body.
+
+    Returns:
+    T_s:        [float] Orbit period.
+    """
+    T_s = 2 * np.pi * np.sqrt(a_km**3 / mu_km3_s2)
+    return T_s
+
+def period2mean_motion(T_s: float) -> float:
+    """
+    Calculate the mean motion given an orbital period.
+
+    Arguments:
+    T_s:        [float] Orbit period.
+
+    Returns:
+    n_rad_s:    [float] Mean motion.
+    """
+    n_rad_s = 2 * np.pi / T_s
+    return n_rad_s
+
+def time2mean_anom(n_rad_s: float, dt_s: float) -> float:
+    """
+    Calculate the mean anomaly for a given time since passage of periapsis.
+
+    Arguments:
+    n_rad_s:    [float] Mean motion.
+    dt_s:       [float] Time since passage of periapsis. Should be less than orbit period.
+
+    Returns:
+    M_rad:      [float] Mean anomaly.
+    """
+    M_rad = n_rad_s * dt_s
+    return M_rad
+
+def true_anom2ecc_anom(e: float, nu_rad: float) -> float:
+    """
+    Calculate the eccentric anomaly given the true anomaly.
+
+    Arguments:
+    e:      [float] Eccentricity.
+    nu_rad: [float] True anomaly.
+
+    Returns:
+    E_rad:  [float] Eccentric anomaly.
+    """
+    E_rad = 2 * np.arctan(np.sqrt((1 - e)/(1 + e)) * np.tan(nu_rad / 2))
+    return E_rad
+
+def ecc_anom2mean_anom(E_rad: float, e: float) -> float:
+    """
+    Calculate the mean anomaly given the eccentric anomaly.
+
+    Arguments:
+    E_rad:  [float] Eccentric anomaly.
+    e:      [float] Eccentricity.
+
+    Returns:
+    M_rad:  [float] Mean anomaly.
+    """
+    M_rad = E_rad - e * np.sin(E_rad)
+    return M_rad
+
+def ecc_anom2true_anom(E_rad: float, e: float) -> float:
+    """
+    Calculate the true anomaly given the eccentric anomaly.
+
+    Arguments:
+    E_rad:  [float] Eccentric anomaly.
+    e:      [float] Eccentricity.
+
+    Returns:
+    nu_rad: [float] True anomaly.
+    """
+    nu_rad = 2 * np.arctan(np.sqrt((1 - e)/(1 + e)) * np.tan(E_rad / 2))
+    return nu_rad
+
+def mean_anom2ecc_anom(M_rad: float) -> float:
+    """
+    Calculate the eccentric anomaly given the mean anomaly.
+
+    Arguments:
+    M_rad:  [float] Mean anomaly.
+
+    Returns:
+    E_rad:  [float] Eccentric anomaly.
+    """
+    # TODO: requires root finder like Newton-Raphson; should be done in a separate module
+    raise NotImplementedError("Mean anomaly to eccentric anomaly not implemented pending root finding tools")
+
+def time2true_anom(a_km: float, e: float, mu_km3_s2: float, dt_s: float) -> float:
+    """
+    Calculate the true anomaly given an orbit's shape parameters and the time since periapsis passage.
+
+    Arguments:
+    a_km:       [float] Semi-major axis of the orbit.
+    e:          [float] Eccentricity of the orbit.
+    mu_km3_s2:  [float] Gravitational parameter of the primary body.
+    dt_s:       [float] Time since passage of periapsis. Should be less than the orbital period.
+
+    Returns:
+    nu_rad:     [float] True anomaly at the specified time.
+    """
+    T_s = get_orbit_period(a_km, mu_km3_s2)
+    n_rad_s = period2mean_motion(T_s)
+    M_rad = time2mean_anom(n_rad_s, dt_s)
+    E_rad = mean_anom2ecc_anom(M_rad)
+    nu_rad = ecc_anom2true_anom(E_rad, e)
+    return nu_rad
+
+def epoch2time_since_periapsis(
+        target_epoch_j2000_d: float,
+        reference_epoch_j2000_d: float,
+        kep_elements: KeplerianElements,
+        reference_nu_rad: float,
+        mu_km3_s2: float) -> float:
+    """
+    Convert target epoch time to time since the most recent passage of periapsis.
+
+    Arguments:
+    target_epoch_j2000_d:      [float] Target epoch, in days since J2000.
+    reference_epoch_j2000_d:   [float] Epoch where the orbital state is known, in days since J2000.
+    kep_elements:              [KeplerianElements] Orbit elements at the reference epoch.
+    reference_nu_rad:          [float] True anomaly at the reference epoch.
+    mu_km3_s2:                 [float] Gravitational parameter of the primary body.
+
+    Returns:
+    target_dt_s:               [float] Time since most recent passage of periapsis.
+    """
+    T_s = get_orbit_period(kep_elements.a_km, mu_km3_s2)
+    n_rad_s = period2mean_motion(T_s)
+
+    E_rad = true_anom2ecc_anom(kep_elements.e, reference_nu_rad)
+    M_rad = ecc_anom2mean_anom(E_rad, kep_elements.e) % (2 * np.pi)
+
+    reference_dt_s = M_rad / n_rad_s
+    epoch_dt_s = (target_epoch_j2000_d - reference_epoch_j2000_d) * 86400
+    target_dt_s = (reference_dt_s + epoch_dt_s) % T_s
+
+    return target_dt_s
+
+def get_ang_momentum(a_km: float, e: float, mu_km3_s2: float) -> float:
+    """
+    Calculate an orbit's angular momentum using shape parameters.
+
+    Arguments:
+    a_km:       [float] Semi-major axis of the orbit.
+    e:          [float] Eccentricity of the orbit.
+    mu_km3_s2:  [float] Gravitational parameter of the primary body.
+
+    Returns:
+    h_km2_s:    [float] Angular momentum of the orbit.
+    """
+    h_km2_s = np.sqrt(mu_km3_s2 * a_km * (1 - e**2))
+    return h_km2_s
+
+def keplerian2cartesian(kep: KeplerianElements, nu_rad: float, mu_km3_s2: float) -> np.ndarray:
+    """
+    Convert Keplerian elements and true anomaly to a cartesian state vector in the intertial frame.
+
+    Arguments:
+    kep:        [KeplerianElements] Set of Keplerian elements describing the whole orbit.
+    nu_rad:     [float] True anomaly at the point of conversion.
+    mu_km3_s2:  [float] Gravitational parameter of the primary body.
+
+    Returns:
+    x:          [np.ndarray] 6x1 Orbital state vector in cartesian inertial coordinates.
+    """
+    raise NotImplementedError("Keplerian elements to cartesian state vector not implemented pending rotation tools")
+
+    # State vector in perifocal frame
+    h_km2_s = get_ang_momentum(kep.a_km, kep.e, mu_km3_s2)
+    r_w_km = h_km2_s**2 / mu_km3_s2 / (1 + kep.e * np.cos(nu_rad)) * np.array((np.cos(nu_rad), np.sin(nu_rad), 0))
+    v_w_km_s = mu_km3_s2 / h_km2_s * np.array((-np.sin(nu_rad), kep.e + np.cos(nu_rad), 0))
+
+    # Rotate to ECI
+    # TODO: rotation utils
+    R = C3(-om_rad) @ C1(-i_rad) @ C3(-Om_rad)
+    r_g_km = r_w_km @ R
+    v_g_km_s = v_w_km_s @ R
+
+    # Combine into single state vector
+    x = np.hstack([r_g_km, v_g_km_s])
+
+    return x
+
+def cartesian2keplerian(x: np.ndarray, mu_km3_s2: float) -> tuple[KeplerianElements, float]:
+    """
+    Convert a cartesian state vector to Keplerian elements with true anomaly.
+
+    Arguments:
+    x:                  [np.ndarray] (6x1) Orbital state vector in cartesian inertial frame.
+    mu_km3_s2:          [float] Gravitational parameter of the primary body.
+
+    Returns:
+    kep:                [KeplerianElements] Object containing the global Keplerian elements of the orbit.
+    nu_rad:             [float] True anomaly corresponding to the position vector.
+    """
+    r_g_km = x[0:3]
+    r_km = np.linalg.norm(r_g_km)
+    v_g_km_s = x[3:]
+    v_km_s = np.linalg.norm(v_g_km_s)
+
+    v_r_km_s = np.dot(v_g_km_s, r_g_km / r_km)
+    v_t_km_s = np.sqrt(v_g_km_s**2 - v_r_km_s**2)
+
+    # Orbit angular momentum
+    h_km2_s = np.cross(r_g_km, v_g_km_s)
+
+    # Find semi-major axis
+    a_km = (mu_km3_s2 * r_km) / (2 * mu_km3_s2 - r_km * v_km_s**2)
+
+    # Inclination
+    i_rad = np.arccos(h_km2_s[2] / h_km2_s)
+
+    # Right ascension of the ascending node
+    K = np.array((0, 0, 1))
+    N = np.cross(K, h_km2_s)
+    Om_rad = 2 * np.pi - np.arccos(N[0] / np.linalg.norm(N))
+
+    # Eccentricity
+    e_vec = np.cross(v_g_km_s, h_km2_s) / mu_km3_s2 - r_g_km / r_km
+    e = np.linalg.norm(e_vec)
+
+    # Argument of periapsis
+    om_rad = 2 * np.pi - np.arccos(np.dot(N, e_vec) / (N * e))
+
+    # True anomaly
+    nu_rad = np.arccos(np.dot(r_g_km / r_km, e_vec / e))
+
+    kep = KeplerianElements(a_km = a_km,
+                            e = e,
+                            i_rad = i_rad,
+                            Om_rad = Om_rad,
+                            om_rad = om_rad)
+
+    return kep, nu_rad
+
+def mee_motion(me: ModifiedEquinoctialElements, L_rad: float, p_rsw_m2_s2: np.ndarray, mu_km3_s2: float) -> np.ndarray:
+    """
+    Given an orbital state described by MEEs and any perturbations in the Radial-Cross-track-Along-track frame (RSW),
+    determine the time rate of change of these elements.
+
+    Arguments:
+    me:             [ModifiedEquinoctialElements] Modified equinoctial elements describing the orbit.
+    L_rad:          [float] True longitude {Om + om + nu}
+    p_rsw_m2_s2:    [np.ndarray] (3x1) Vector of summed perturbing accelerations in the RSW frame.
+    mu_km3_s2:      [float] Gravitational parameter of the primary body.
+    """
+    
+    # Auxiliary variables
+    qx = 1 + me.f * np.cos(L_rad) + me.g * np.sin(L_rad)
+    s2 = 1 + me.h**2 + me.k**2
+    p_mu = np.sqrt(me.p_km / mu_km3_s2)
+
+    # Equations of motion
+    pdot_km_s = p_mu * 2 * (me.p_km / qx) * p_rsw_m2_s2[1]
+
+    fdot__s = p_mu * (np.sin(L_rad) * p_rsw_m2_s2[0])\
+            + (1 / qx) * ((qx + 1) * np.cos(L_rad) + me.f) * p_rsw_m2_s2[1]\
+            - (me.g / qx) * (me.h * np.sin(L_rad) - me.k * np.cos(L_rad) * p_rsw_m2_s2[2])
+
+    gdot__s = p_mu * (-np.cos(L_rad) * p_rsw_m2_s2[0])\
+            + (1 / qx) * ((qx + 1) * np.sin(L_rad) + me.g) * p_rsw_m2_s2[1]\
+            + (me.f / qx) * (me.h * np.sin(L_rad) - me.k * np.cos(L_rad) * p_rsw_m2_s2[2])
+
+    hdot__s = p_mu * ((s2 * np.cos(L_rad)) / (2 * qx)) * p_rsw_m2_s2[2]
+
+    kdot__s = p_mu * ((s2 * np.sin(L_rad)) / (2 * qx)) * p_rsw_m2_s2[2]
+
+    Ldot_rad_s = np.sqrt(mu_km3_s2 * me.p_km) * (qx / me.p_km)**2\
+            + p_mu * (1 / qx) * (me.h * np.sin(L_rad) - me.k * np.cos(L_rad)) * p_rsw_m2_s2[2]
+
+    medot = np.array([pdot_km_s, fdot__s, gdot__s, hdot__s, kdot__s, Ldot_rad_s])
+
+    return medot
+
+def cowell_motion(x: np.ndarray, p_m2_s2: np.ndarray):
+    """
+    Calculate the orbital motion of a Cartesian state using Cowell's method.
+
+    Arguments:
+    x:      (np.ndarray) (6x1) Orbital state vector. (x, y, z, v_x, v_y, v_z)
+    p_m2_s2 (np.ndarray) (3x1) Perturbing accelerations.
+
+    Returns:
+    xdot:   (np.ndarray) (6x1) Orbit motion.
+    """
+
+    G = 6.6743 * 10**-11
+    M = 5.97219 * 10**24
+    mu = G*M
+
+    dr = x[3:6]
+
+    r_vec = x[0:3]
+    r_mag = np.linalg.norm(r_vec) # magnitude of r vector
+
+    dv = ( -mu*r_vec/(r_mag)**3 ) + p_m2_s2
+    
+    xdot = np.concatenate((dr, dv)).reshape(6, 1) # just in case make sure it's right shape
+    return xdot
+
+def encke_motion(x: np.ndarray):
+    """
+    Calculate the orbital motion of a Cartesian state using Encke's method.
+
+    Arguments:
+    x:      (np.ndarray) (6x1) Orbital state vector.
+    p_m2_s2 (np.ndarray) (3x1) Perturbing accelerations.
+
+    Returns:
+    xdot:   (np.ndarray) (6x1) Orbit motion.
+    """
+    # TODO: Implementation
+    xdot = np.array([0., 0., 0., 0., 0., 0.])
+    return xdot
+
+def propagate_sgp4(tle: str, t: float):
+    """
+    Propagate an orbit from an initial state given by a TLE using SGP4.
+
+    Arguments:
+    tle:    (str) Two Line Element set describing the orbital state at a specified epoch.
+    t:      (float) Time to retrieve orbital state vector.
+
+    Returns:
+    x:      (np.ndarray) Orbital state at specified time.
+    """
+    #TODO: Appropriate time specification (time since periapsis? epoch time?)
+    #TODO: SGP4 implementation
+    x = np.array([0., 0., 0., 0., 0., 0.])
+    return x
