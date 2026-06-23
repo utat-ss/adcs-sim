@@ -67,3 +67,10 @@ def test_statistically_consistent_noise(mock_fss):
     assert calculated_stdev_alpha == pytest.approx(true_stdev_alpha, abs = 0.05)
     assert calculated_stdev_beta == pytest.approx(true_stdev_beta, abs = 0.05)
 
+def test_fss_digitization_precision():
+    """
+    Verify that FSS measurements adhere to the sensor's digitization precision.
+    """
+    # TODO: Once quantization logic is added to sensors.py, 
+    # define a mock bit-precision and assert that angles match discrete step steps.
+    pytest.skip("Skipping until quantization step size details are finalized.")
