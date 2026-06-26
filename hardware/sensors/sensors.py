@@ -329,6 +329,8 @@ class VirtualMTM(VirtualSensor):
                                                [0.0, 0.0, 0.0],
                                                [0.0, 0.0, 0.0]])
         self.rate_hz: float = 0.0
+        self.cov_ut2: np.ndarray = np.array([[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]], dtype=float)
+        self._load_cfg(cfg_file)
 
     def _load_cfg(self, cfg_file: Path):
         """
@@ -340,38 +342,65 @@ class VirtualMTM(VirtualSensor):
         Returns:
         None
         """
+        cfg_file = Path(cfg_file)
+
+        if not cfg_file.exists():
+            raise FileNotFoundError(f"STR config file not found: {cfg_file}")
         with open(cfg_file, 'r') as f:
-            raise NotImplementedError()
+            cfg = json.load(f)
+
+        self.model = str(cfg.get("model", self.model))
+        self.lims_ut = tuple(cfg["lims_ut"])
+        self.bias_ut = float(cfg["bias_ut"])
+        self.soft_iron = np.array(cfg["soft_iron"])
+        self.rate_hz = float(cfg["rate_hz"])
+        self.cov_ut2 = np.array(cfg["cov_ut2"])
             
-    def measure(self, quat, mtm_vector_eci, R_BS):
+    def measure(self, quat, B_ECI, R_SB):
+        """
+        This function converts the magnetic field vector from ECI frame to sensor frame and adds bias, soft iron, and noise
+
+        Arguments:
+
+        quat: quaternion used to get the rotation matrix from ECI to Body Frame
+
+        B_ECI: magnetic field vector in ECI frame
+
+        R_SB: rotation matrix from Body frame to Sensor frame
+
+        Returns: 
+
+        Magnetic field vector in sensor frame after adding hard iron bias, soft iron distortion, and noise
+        """
+
         #ECI to body frame
-        quatRotMatrix = quatToRotationMatrix(quat)
+        R_BE = quatToRotationMatrix(quat)
         
-        mtm_vector_eci = np.asarray(mtm_vector_eci, dtype = float)
-        if mtm_vector_eci.shape!= (3,):
-            raise ValueError("mtm_vector_eci must be a 3D vector")
+        B_ECI = np.asarray(B_ECI, dtype = float)
+        if B_ECI.shape!= (3,):
+            raise ValueError("B_ECI must be a 3D vector")
         
-        R_BS = np.asarray(R_BS, dtype = float)
-        if R_BS.shape != (3,3):
-            raise ValueError("R_BS must be a 3x3 matrix")
+        R_SB = np.asarray(R_SB, dtype = float)
+        if R_SB.shape != (3,3):
+            raise ValueError("R_SB must be a 3x3 matrix")
         
-        mtm_body_vector = quatRotMatrix @ mtm_vector_eci
+        mtm_body_vector = R_BE @ B_ECI
         
         #convert body to sensor frame
-        mtm_sensor_vector = R_BS @ mtm_body_vector
-
-        #add noise
-        noise = np.random.normal(0,1,3)
-        mtm_sensor_vector += noise
-
-        #check it hasn't reached limits of what it can measure
-        mtm_sensor_vector = np.clip(mtm_sensor_vector, self.lims_ut[0], self.lims_ut[1])
+        mtm_sensor_vector = R_SB @ mtm_body_vector
 
         #add bias (hard iron)
         mtm_sensor_vector += self.bias_ut
 
         #add soft iron
         mtm_sensor_vector = self.soft_iron @ mtm_sensor_vector
+
+        #add noise
+        noise = np.random.multivariate_normal(mean=np.zeros(3), cov=self.cov_ut2)
+        mtm_sensor_vector += noise
+
+        #check it hasn't reached limits of what it can measure
+        mtm_sensor_vector = np.clip(mtm_sensor_vector, self.lims_ut[0], self.lims_ut[1])
 
         return mtm_sensor_vector
 
