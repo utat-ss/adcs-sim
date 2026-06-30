@@ -6,6 +6,7 @@ import numpy as np
 from abc import ABC, abstractmethod
 
 import math
+import utils
 
 class VirtualSensor(ABC):
     def __init__(self, cfg_file: Path):
