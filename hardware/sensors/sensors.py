@@ -166,6 +166,7 @@ class VirtualFSS(VirtualSensor):
 
         return self._angle_computation(incident_light_sensor)
 
+
 class VirtualSTR(VirtualSensor):
     """
     Generic virtual star tracker model for use in simulation.
@@ -270,7 +271,117 @@ class VirtualSTR(VirtualSensor):
 
         return np.array([xyz[0], xyz[1], xyz[2], w], dtype=float)
 
-    def measure(self, q_true: np.ndarray) -> np.ndarray:
+    def determine_body_tangent_vectors(self, planar_body_vector: np.ndarray, body_radius: float) -> tuple:
+        """to be added"""
+
+        normed_vec = np.linalg.norm(planar_body_vector)
+        tangent_dot_body = normed_vec ** 2 - (body_radius ** 2)
+        if tangent_dot_body <= 0.0:
+            raise ValueError("planar_body_vector must be of a greater magnitude than body_radius.")
+        
+        temp = math.sqrt(tangent_dot_body) * body_radius
+        
+        tangent_1_coord_1 = (tangent_dot_body * planar_body_vector[0] + planar_body_vector[1] * temp) / (normed_vec ** 2)
+        tangent_1_coord_2 = (tangent_dot_body * planar_body_vector[1] - planar_body_vector[0] * temp) / (normed_vec ** 2)
+
+        tangent_2_coord_1 = (tangent_dot_body * planar_body_vector[0] - planar_body_vector[1] * temp) / (normed_vec ** 2)
+        tangent_2_coord_2 = (tangent_dot_body * planar_body_vector[1] + planar_body_vector[0] * temp) / (normed_vec ** 2)
+
+        return (np.array([tangent_1_coord_1, tangent_1_coord_2]), np.array([tangent_2_coord_1, tangent_2_coord_2]))
+
+    def _to_planar_vector(self, sat_vector: np.ndarray, body_vector: np.ndarray) -> np.ndarray:
+        """to be added"""
+        
+        coord_1 = np.dot(sat_vector, body_vector) / np.linalg.norm(sat_vector)
+        temp = (np.linalg.norm(body_vector) ** 2) - (coord_1 ** 2)
+        if temp < 0.0:
+            temp = round(temp, 10)
+            if temp < 0.0:
+                raise ValueError("Invalid vectors entered into function.")
+            
+        coord_2 = math.sqrt(temp)
+
+        return np.array([coord_1, coord_2])
+    
+    def _from_planar_vector(self, sat_vector: np.ndarray, body_vector_3D: np.ndarray, body_vector_2D: np.ndarray) -> np.ndarray:
+        """to be added"""
+        
+        plane_normal = np.cross(body_vector_3D, sat_vector)
+        dir_vect_2 = np.cross(sat_vector, plane_normal)
+
+        unit_vect_1 = sat_vector / np.linalg.norm(sat_vector)
+        if np.array_equal(dir_vect_2, np.zeros(3)):
+            unit_vect_2 = np.zeros(3)
+        else:
+            unit_vect_2 = dir_vect_2 / np.linalg.norm(dir_vect_2)
+
+        return unit_vect_1 * body_vector_2D[0] + unit_vect_2 * body_vector_2D[1]
+
+    def angle_between_vectors(self, vector_1: np.ndarray, vector_2: np.ndarray) -> float:
+        """to be added"""
+
+        dot_p = np.dot(vector_1, vector_2)
+        norm_1 = np.linalg.norm(vector_1)
+        norm_2 = np.linalg.norm(vector_2)
+        if norm_1 == 0.0 or norm_2 == 0.0:
+            raise ValueError("Both vector_1 and vector_2 must have nonzero magnitude.")
+
+        cos_theta = dot_p / (norm_1 * norm_2)
+        vector_angle_rad = math.acos(cos_theta)
+        return vector_angle_rad
+
+    def eval_body_in_zone(self, sat_vector: np.ndarray, body_vector: np.ndarray, body_name: str) -> bool:
+        """to be added"""
+
+        if sat_vector.shape != (3,) or np.linalg.norm(sat_vector) == 0:
+            raise ValueError("sat_vector must be a nonzero 3D vector.")
+        
+        if body_vector.shape != (3,) or np.linalg.norm(body_vector) == 0:
+            raise ValueError("body_vector must be a nonzero 3D vector.")
+        
+        if body_name not in ["sun", "moon", "earth"]:
+            raise ValueError("body_name must be one of 'sun', 'moon', or 'earth'.")
+
+        zone_angle_rad = 0.0
+        body_radius = 1.0
+
+        if body_name == "sun":
+            zone_angle_rad = self.exclusion_rad / 2
+            body_radius = 695700000.0 # should be moved eventually to constants file
+        elif body_name == "moon":
+            zone_angle_rad = self.fov_rad / 2
+            body_radius = 1737400.0
+        elif body_name == "earth":
+            zone_angle_rad = self.fov_rad / 2
+            body_radius =  6378137.0 # equatorial radius (class may give false negative near poles)
+
+        body_angle = self.angle_between_vectors(sat_vector, body_vector)
+
+        body_vector_2D = self._to_planar_vector(sat_vector, body_vector)
+        tangent_vectors_2D = self.determine_body_tangent_vectors(body_vector_2D, body_radius)
+        tangent_vectors_3D = (self._from_planar_vector(sat_vector, body_vector, tangent_vectors_2D[0]), self._from_planar_vector(sat_vector, body_vector, tangent_vectors_2D[1]))
+        tangent_angles = (self.angle_between_vectors(sat_vector, tangent_vectors_3D[0]), self.angle_between_vectors(sat_vector, tangent_vectors_3D[1]))
+
+        if body_angle <= zone_angle_rad:
+            # print("0")
+            return True
+        elif tangent_angles[0] <= zone_angle_rad:
+            # print("1")
+            return True
+        elif tangent_angles[1] <= zone_angle_rad:
+            # print("2")
+            return True
+        elif body_angle < math.pi / 2: # double check accuracy
+            if tangent_vectors_2D[0][1] > 0 and tangent_vectors_2D[1][1] < 0:
+                # print("3")
+                return True
+            elif tangent_vectors_2D[0][1] < 0 and tangent_vectors_2D[1][1] > 0:
+                # print("4")
+                return True
+
+        return False
+
+    def measure(self, q_true: np.ndarray, sun_vector: np.ndarray, moon_vector: np.ndarray, earth_vector: np.ndarray) -> np.ndarray:
         """
         Return noisy measured attitude quaternion.
 
@@ -282,10 +393,19 @@ class VirtualSTR(VirtualSensor):
             q_meas:
                 Noisy measured attitude quaternion [x, y, z, w].
         """
+
+        if self.eval_body_in_zone(q_true[0:3], sun_vector, "sun"):
+            return np.zeros(4)
+        elif self.eval_body_in_zone(q_true[0:3], moon_vector, "moon"):
+            return np.zeros(4)
+        elif self.eval_body_in_zone(q_true[0:3], earth_vector, "earth"):
+            return np.zeros(4)
+        
+        # TODO: Implement eclipse functionality
+
         q_true = self._normalize_quat(q_true)
 
-        sigma_rad = np.sqrt(np.diag(self.cov_diag))
-        noise_rad = np.random.normal(loc=0.0, scale=sigma_rad, size=3)
+        noise_rad = np.random.multivariate_normal(np.zeros(3), self.cov_rad2)
 
         dq = self._quat_from_rotvec(noise_rad)
 
