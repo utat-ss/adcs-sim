@@ -16,12 +16,12 @@ def j2_acceleration_m_s2(
     j2 (float): Second zonal harmonic coefficient representing the effect of the Earth's oblateness [unitless].
 
     Returns:
-    tuple: ax, ay, az -> perturbation acceleration vector [m/s^2].
+    tuple: ax, ay, az -> acceleration due to Earth's J2 oblateness perturbation [m/s^2].
     """
     x, y, z = r_eci_m
     r_norm_m = np.linalg.norm(r_eci_m)
 
-    if r_norm_m <= 0:
+    if r_norm_m == 0:
         raise ValueError("Position vector must be nonzero.")
 
     z2_over_r2 = (z**2) / (r_norm_m**2)
@@ -58,9 +58,9 @@ def atmospheric_density_kg_m3(
     if altitude_m < 0:
         raise ValueError("Altitude must be nonnegative.")
 
-    sea_level_atmosphere_kg_m3 = 1.225
+    sea_level_density_kg_m3 = 1.225
     atmosphere_scale_m = 8500.0
 
-    density_kg_m3 = sea_level_atmosphere_kg_m3 * np.exp(-altitude_m / atmosphere_scale_m)
+    density_kg_m3 = sea_level_density_kg_m3 * np.exp(-altitude_m / atmosphere_scale_m)
 
     return float(density_kg_m3)
