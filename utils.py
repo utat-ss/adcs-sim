@@ -208,8 +208,6 @@ def quat_from_rotvec(rotvec_rad: np.ndarray) -> np.ndarray:
 
     return np.array([xyz[0], xyz[1], xyz[2], w], dtype=float)
 
-import numpy as np
-
 
 def euler_to_quat(
     roll: float,
@@ -340,3 +338,78 @@ def quat_to_rotmat(q: np.ndarray) -> np.ndarray:
     ])
 
     return R
+
+
+def rot_x(theta_rad: float) -> np.ndarray:
+    """
+    Returns the rotation matrix around the X-axis (C1)
+
+    Parameters
+    ----------
+    theta_rad : float
+        Rotation angle in radians.
+
+    Returns
+    -------
+    np.ndarray, shape (3, 3)
+        Rotation matrix.
+    """
+
+    theta_rad = float(theta_rad)
+    c = np.cos(theta_rad)
+    s = np.sin(theta_rad)
+    return np.array([
+        [1.0, 0.0, 0.0],
+        [0.0, c,   -s],
+        [0.0, s,    c]
+    ], dtype=float)
+
+
+def rot_y(theta_rad: float) -> np.ndarray:
+    """
+    Returns the rotation matrix around the Y-axis (C2)
+
+    Parameters
+    ----------
+    theta_rad : float
+        Rotation angle in radians.
+
+    Returns
+    -------
+    np.ndarray, shape (3, 3)
+        Rotation matrix.
+    """
+
+    theta_rad = float(theta_rad)
+    c = np.cos(theta_rad)
+    s = np.sin(theta_rad)
+    return np.array([
+        [c, 0.0, s],
+        [0.0, 1.0, 0.0],
+        [-s, 0.0, c]
+    ], dtype=float)
+
+
+def rot_z(theta_rad: float) -> np.ndarray:
+    """
+    Returns the rotation matrix around the Z-axis (C3)
+
+    Parameters
+    ----------
+    theta_rad : float
+        Rotation angle in radians.
+
+    Returns
+    -------
+    np.ndarray, shape (3, 3)
+        Rotation matrix.
+    """
+
+    theta_rad = float(theta_rad)
+    c = np.cos(theta_rad)
+    s = np.sin(theta_rad)
+    return np.array([
+        [c, -s, 0.0],
+        [s, c, 0.0],
+        [0.0, 0.0, 1.0]
+    ], dtype=float)
