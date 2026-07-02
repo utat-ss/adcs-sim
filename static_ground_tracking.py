@@ -120,5 +120,6 @@ def get_geo_coords(a_km = 6771.0, e = 0.001, i_rad = np.radians(51.6),
 
     return(lat_deg_list, lon_deg_list)
 
-lat, lon = get_geo_coords()
-plot_ground_track(lat, lon)
+if __name__ == "__main__":
+    lat, lon = get_geo_coords()
+    plot_ground_track(lat, lon)
