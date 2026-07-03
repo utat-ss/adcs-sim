@@ -6,7 +6,7 @@ import numpy as np
 from abc import ABC, abstractmethod
 
 import math
-import utils
+from ...utils import geometric_calculations as gc
 
 class VirtualSensor(ABC):
     def __init__(self, cfg_file: Path):
@@ -63,7 +63,7 @@ class VirtualFSS(VirtualSensor):
         self.rate_hz = float(cfg["rate_hz"])
         self.cov_deg2 = np.asarray(cfg["cov_deg2"], dtype=float)
 
-    def _angle_computation(self, incident_light_sensor: np.ndarray):
+    def _angle_computation(self, incident_light_sensor: np.ndarray) -> tuple:
         """
         Compute FSS angular output from an incident light vector in sensor frame.
 
@@ -81,33 +81,19 @@ class VirtualFSS(VirtualSensor):
                 3D incident light direction vector expressed in sensor frame.
 
         Returns:
-            dict with:
+            Tuple (alpha_deg, beta_deg) where:
                 alpha_deg: signed x-z plane angle [deg]
                 beta_deg: signed y-z plane angle [deg]
-                sun_present: True if light is inside FOV
         """
         incident_light_sensor = np.asarray(incident_light_sensor, dtype=float)
-        if incident_light_sensor.shape != (3,):
-            raise ValueError("incident_light_sensor must be a 3D vector.")
-
-        if np.linalg.norm(incident_light_sensor) == 0:
-            return {
-                "alpha_deg": 0,
-                "beta_deg": 0,
-                "sun_present": False,
-            }
+        if incident_light_sensor.shape != (3,) or np.linalg.norm(incident_light_sensor) == 0:
+            raise ValueError("incident_light_sensor must be a nonzero 3D vector.")
 
         alpha_rad = np.arctan2(incident_light_sensor[0], incident_light_sensor[2])
         beta_rad = np.arctan2(incident_light_sensor[1], incident_light_sensor[2])
 
         alpha_deg = np.rad2deg(alpha_rad)
         beta_deg = np.rad2deg(beta_rad)
-
-        inside_fov = (
-                abs(alpha_deg) <= self.fov_deg
-                and abs(beta_deg) <= self.fov_deg
-                and incident_light_sensor[2] > 0.0
-        )
 
         noise = np.random.multivariate_normal(mean=np.zeros(2), cov=self.cov_deg2)
         # TODO: self.cov_deg2 must follow the same ordering as the measurement vector:
@@ -120,34 +106,54 @@ class VirtualFSS(VirtualSensor):
         alpha_deg += alpha_noise
         beta_deg += beta_noise
 
-        return {
-            "alpha_deg": alpha_deg,
-            "beta_deg": beta_deg,
-            "sun_present": inside_fov,
-        }
+        return (alpha_deg, beta_deg)
     
-    def eval_eclipse(self, sat_vector: np.ndarray, sun_vector: np.ndarray, earth_vector: np.ndarray) -> bool:
-        """to be added"""
+    def eval_eclipse(self, sat_vector: np.ndarray, sun_vector: np.ndarray, body_vector: np.ndarray, body_radius: float) -> bool:
+        """
+        Determine whether the sun is being eclipsed by another body of a given radius
+        in the satellite's reference frame. Assumes that such a body is closer than the sun
+        to the satellite.
+
+        Arguments:
+            sat_vector:
+                3D direction vector of sun sensor boresight in body frame.
+
+            sun_vector:
+                3D sun position vector in body frame.
+
+            body_vector:
+                3D eclipsing body position vector in body frame.
+
+            body_radius:
+                Radius of eclipsing body.
+
+        Returns: Boolean value which is True when the sun is being eclipsed.
+        """
 
         plane_normal = np.cross(sun_vector, sat_vector)
-        proj_earth_info = utils.sphere_plane_intersection(earth_vector, 6378137.0, plane_normal) # change to reference to constants file
+        if np.allclose(plane_normal, np.zeros(3)): # Addresses case where sun is directly in front of sensor
+            if np.allclose(sun_vector / np.linalg.norm(sun_vector), np.array([1,0,0])):
+                plane_normal = np.cross(sun_vector, np.array([0,1,0]))
+            else:
+                plane_normal = np.cross(sun_vector, np.array([1,0,0]))
+                
+        proj_body_info = gc.sphere_plane_intersection(body_vector, body_radius, plane_normal)
         
-        sun_vect_planar = utils.to_planar_vector(sat_vector, sun_vector)
-        earth_vect_planar = utils.to_planar_vector(sat_vector, proj_earth_info[0])
+        sun_vect_planar = gc.to_planar_vector(sat_vector, sun_vector)
+        body_vect_planar = gc.to_planar_vector(sat_vector, proj_body_info[0])
 
-        tangent_vects_planar = utils.determine_body_tangent_vectors(earth_vect_planar, proj_earth_info[1])
+        tangent_vects_planar = gc.determine_circle_tangent_vectors(body_vect_planar, proj_body_info[1])
 
-        sun_tangent_angles = (utils.angle_between_vectors(sun_vect_planar, tangent_vects_planar[0]), utils.angle_between_vectors(sun_vect_planar, tangent_vects_planar[1]))
-        tangent_tangent_angle = utils.angle_between_vectors(tangent_vects_planar[0], tangent_vects_planar[1])
+        sun_tangent_angles = (gc.angle_between_vectors(sun_vect_planar, tangent_vects_planar[0]), gc.angle_between_vectors(sun_vect_planar, tangent_vects_planar[1]))
+        tangent_tangent_angle = gc.angle_between_vectors(tangent_vects_planar[0], tangent_vects_planar[1])
 
-        if round(tangent_tangent_angle, 10) == round(sun_tangent_angles[0] + sun_tangent_angles[1], 10):
+        if round(tangent_tangent_angle, 10) == round(sun_tangent_angles[0] + sun_tangent_angles[1], 10) and (not np.allclose(tangent_vects_planar[0], tangent_vects_planar[1])):
             return True
-        else:
-            return False
+        return False
 
-    def measure(self, sun_vec_body, R_BS, sun_vector, earth_vector, r_mount=None):
+    def measure(self, R_BS: np.ndarray, sun_vector: np.ndarray, earth_vector: np.ndarray, moon_vector: np.ndarray, r_mount = None) -> dict:
         """
-        Compute FSS angular output from Sun and satellite position vectors.
+        Compute FSS angular output from sun, Earth, and moon vectors.
 
         This method assumes:
             incident_light = sun_pos - r_mount (optional)
@@ -157,43 +163,71 @@ class VirtualFSS(VirtualSensor):
 
         Arguments:
 
-            :param sun_vec_body:
-                3D Sun position vector in the body frame.
-
-            :param R_BS:
+            R_BS:
                 External mounting matrix turns from body frame to sensor frame
 
-            :param r_mount: mounting position, usually negligible.
+            sun_vector:
+                3D sun position vector in body frame.
+
+            earth_vector:
+                3D Earth position vector in body frame.
+
+            moon_vector:
+                3D moon position vector in body frame.
+
+            r_mount: mounting position, usually negligible.
 
         Returns:
-            Same dict as measure_from_sensor_vector.
+            Dictionary containing {
+                alpha_deg: signed x-z plane angle [deg]
+                beta_deg: signed y-z plane angle [deg]
+                sun_present: True if sun is inside FOV and not in eclipse
+            }
         """
 
-        # following to be refactored:
         if r_mount is None:
             r_mount = np.zeros(3)
         else:
             r_mount = np.asarray(r_mount, dtype=float)
 
-        sun_vec_body = np.asarray(sun_vec_body, dtype=float)
-        if sun_vec_body.shape != (3,) or r_mount.shape != (3,):
+        sun_vector = np.asarray(sun_vector, dtype=float)
+        if sun_vector.shape != (3,) or r_mount.shape != (3,):
             raise ValueError("sun_pos and r_mount must both be 3D vectors.")
 
         R_BS = np.asarray(R_BS, dtype=float)
         if R_BS.shape != (3, 3):
             raise ValueError("R_BS must be a 3x3 matrix.")
 
-        incident_light_body = sun_vec_body - r_mount
+        incident_light_body = sun_vector - r_mount
         incident_light_sensor = R_BS @ incident_light_body
 
-        if self.eval_eclipse(np.array([1,0,0]), sun_vector, earth_vector):
-            return {
+        ab_angles_deg = self._angle_computation(incident_light_sensor)
+
+        inside_fov = (
+            abs(ab_angles_deg[0]) <= self.fov_deg
+            and abs(ab_angles_deg[1]) <= self.fov_deg
+            and incident_light_sensor[2] > 0.0
+        )
+
+        no_sun_dict = {
             "alpha_deg": 0.0,
             "beta_deg": 0.0,
             "sun_present": False,
-            }
+        }
 
-        return self._angle_computation(incident_light_sensor)
+        if inside_fov:
+            if self.eval_eclipse(R_BS @ np.array([1,0,0]), sun_vector, earth_vector, 6378137.0): # references should be moved eventually to constants file
+                return no_sun_dict
+            elif self.eval_eclipse(R_BS @ np.array([1,0,0]), sun_vector, moon_vector, 1737400.0):
+                return no_sun_dict
+        else:
+            return no_sun_dict
+
+        return {
+            "alpha_deg": ab_angles_deg[0],
+            "beta_deg": ab_angles_deg[1],
+            "sun_present": True,
+        }
 
 
 class VirtualSTR(VirtualSensor):
@@ -201,11 +235,12 @@ class VirtualSTR(VirtualSensor):
     Generic virtual star tracker model for use in simulation.
 
     Config JSON fields:
+        type: str
         model: str
-        fov_rad: float
-        exclusion_rad: float
+        fov_full_cone_rad: float
+        exclusion_full_cone_rad: float
         rate_hz: float
-        cov_diag: [float, float, float]
+        cov_matrix_rad2: [[float, float, float], [float, float, float], [float, float, float]]
     """
 
     def __init__(self, cfg_file: Path):
@@ -300,79 +335,115 @@ class VirtualSTR(VirtualSensor):
 
         return np.array([xyz[0], xyz[1], xyz[2], w], dtype=float)
 
-    def eval_body_in_zone(self, sat_vector: np.ndarray, body_vector: np.ndarray, body_name: str) -> bool:
-        """to be added"""
+    def eval_body_in_zone(self, sat_vector: np.ndarray, body_vector: np.ndarray, body_radius: float, fov_type: str = "regular") -> bool:
+        """
+        Determine whether a given planetary body is within a given conic field of view.
+        Both vector arguments can be in any shared reference frame.
+
+        Arguments: 
+            sat_vector: 
+                3D direction vector of STR boresight.
+
+            body_vector: 
+                3D stellar body position vector.
+
+            body_name:
+                Radius of stellar body.
+
+            fov_type:
+                Type of FOV considered (either 'regular' or 'exclusion').
+
+        Returns: Boolean value which is True when the given stellar body is in the given FOV.
+        """
 
         if sat_vector.shape != (3,) or np.linalg.norm(sat_vector) == 0:
             raise ValueError("sat_vector must be a nonzero 3D vector.")
         
         if body_vector.shape != (3,) or np.linalg.norm(body_vector) == 0:
             raise ValueError("body_vector must be a nonzero 3D vector.")
-        
-        if body_name not in ["sun", "moon", "earth"]:
-            raise ValueError("body_name must be one of 'sun', 'moon', or 'earth'.")
+  
+        if fov_type not in ["regular", "exclusion"]:
+            raise ValueError("fov_type must be either 'regular' or 'exclusion'.")
 
         zone_angle_rad = 0.0
-        body_radius = 1.0
-
-        if body_name == "sun":
+        if fov_type == "regular":
+            zone_angle_rad = self.fov_rad / 2
+        elif fov_type == "exclusion":
             zone_angle_rad = self.exclusion_rad / 2
-            body_radius = 695700000.0 # should be moved eventually to constants file
-        elif body_name == "moon":
-            zone_angle_rad = self.fov_rad / 2
-            body_radius = 1737400.0
-        elif body_name == "earth":
-            zone_angle_rad = self.fov_rad / 2
-            body_radius =  6378137.0 # equatorial radius (class may give false negative near poles)
 
-        body_angle = utils.angle_between_vectors(sat_vector, body_vector)
+        body_angle = gc.angle_between_vectors(sat_vector, body_vector)
 
-        body_vector_2D = utils.to_planar_vector(sat_vector, body_vector)
-        tangent_vectors_2D = utils.determine_body_tangent_vectors(body_vector_2D, body_radius)
-        tangent_vectors_3D = (utils.from_planar_vector(sat_vector, body_vector, tangent_vectors_2D[0]), utils.from_planar_vector(sat_vector, body_vector, tangent_vectors_2D[1]))
-        tangent_angles = (utils.angle_between_vectors(sat_vector, tangent_vectors_3D[0]), utils.angle_between_vectors(sat_vector, tangent_vectors_3D[1]))
+        body_vector_2D = gc.to_planar_vector(sat_vector, body_vector)
+        tangent_vectors_2D = gc.determine_circle_tangent_vectors(body_vector_2D, body_radius)
+        tangent_vectors_3D = (gc.from_planar_vector(sat_vector, body_vector, tangent_vectors_2D[0]), gc.from_planar_vector(sat_vector, body_vector, tangent_vectors_2D[1]))
+        tangent_angles = (gc.angle_between_vectors(sat_vector, tangent_vectors_3D[0]), gc.angle_between_vectors(sat_vector, tangent_vectors_3D[1]))
 
         if body_angle <= zone_angle_rad:
-            # print("0")
             return True
         elif tangent_angles[0] <= zone_angle_rad:
-            # print("1")
             return True
         elif tangent_angles[1] <= zone_angle_rad:
-            # print("2")
             return True
-        elif body_angle < math.pi / 2: # double check accuracy
+        elif body_angle < math.pi / 2:
             if tangent_vectors_2D[0][1] > 0 and tangent_vectors_2D[1][1] < 0:
-                # print("3")
                 return True
             elif tangent_vectors_2D[0][1] < 0 and tangent_vectors_2D[1][1] > 0:
-                # print("4")
                 return True
+        return False
+    
+    def eval_rate_exceeded(self, cur_rate: float) -> bool:
+        """
+        Determine whether the maximum body rate at which the STR can make measurements has been exceeded.
 
+        Arguments: 
+            cur_rate: 
+                Current body rate [Hz].
+
+        Returns: Boolean value which is True when the current body rate is greater than the known maximum.
+        """
+        max_rate = self.rate_hz
+        
+        if cur_rate > max_rate:
+            return True
         return False
 
-    def measure(self, q_true: np.ndarray, sun_vector: np.ndarray, moon_vector: np.ndarray, earth_vector: np.ndarray) -> np.ndarray:
+    def measure(self, q_true: np.ndarray, sun_vector: np.ndarray, earth_vector: np.ndarray, moon_vector: np.ndarray, cur_body_rate: float) -> np.ndarray:
         """
         Return noisy measured attitude quaternion.
 
         Arguments:
             q_true:
-                True attitude quaternion [x, y, z, w].
+                True attitude quaternion [x, y, z, w] from body frame to STR boresight frame.
+
+            sun_vector:
+                3D sun position vector in body frame.
+
+            earth_vector:
+                3D Earth position vector in body frame.
+
+            moon_vector:
+                3D moon position vector in body frame.
+
+            cur_body_rate:
+                Current body rate [Hz].
 
         Returns:
             q_meas:
-                Noisy measured attitude quaternion [x, y, z, w].
+                Noisy measured attitude quaternion [x, y, z, w]. If any stellar bodies are present, 
+                or the maximum body rate is exceeded, q_meas is equal to the identity quaternion [0,0,0,1].
         """
 
-        if self.eval_body_in_zone(q_true[0:3], sun_vector, "sun"):
-            return np.zeros(4)
-        elif self.eval_body_in_zone(q_true[0:3], moon_vector, "moon"):
-            return np.zeros(4)
-        elif self.eval_body_in_zone(q_true[0:3], earth_vector, "earth"):
-            return np.zeros(4)
-        
-        # TODO: Implement eclipse functionality
+        false_reading = np.array([0,0,0,1])
 
+        if self.eval_rate_exceeded(cur_body_rate):
+            return false_reading
+        elif self.eval_body_in_zone(q_true[0:3], sun_vector, 695700000.0, "exclusion"): # radius values should be moved eventually to constants file
+            return false_reading
+        elif self.eval_body_in_zone(q_true[0:3], earth_vector, 6378137.0, "regular"): # equatorial radius (class may give false negative near poles)
+            return false_reading
+        elif self.eval_body_in_zone(q_true[0:3], moon_vector, 1737400.0, "regular"):
+            return false_reading
+        
         q_true = self._normalize_quat(q_true)
 
         noise_rad = np.random.multivariate_normal(np.zeros(3), self.cov_rad2)
@@ -476,7 +547,7 @@ class VirtualGNSS(VirtualSensor):
         self.LLA_cov_matrix_meters = np.asarray(cfg["LLA_cov_matrix_meters"], dtype=float)
 
     @staticmethod
-    def from_geodetic_LLA(input_coords, semi_major = 6378137.0, semi_minor = 6356752.314245):
+    def from_geodetic_LLA(input_coords: tuple, semi_major: float = 6378137.0, semi_minor: float = 6356752.314245):
         """
         Convert input coordinates from geodetic LLA (geodetic latitude, longitude, altitude) to geocentric LLA
         with distance from Earth's center as the third coordinate (geocentric latitude, longitude, distance to Earth center).
@@ -491,7 +562,7 @@ class VirtualGNSS(VirtualSensor):
         return (geocentric_lat, input_coords[1], dist_from_center)
     
     @staticmethod
-    def to_geodetic_LLA(input_coords, semi_major = 6378137.0, semi_minor = 6356752.314245):
+    def to_geodetic_LLA(input_coords: tuple, semi_major: float = 6378137.0, semi_minor: float = 6356752.314245):
         """
         Convert input coordinates to geodetic LLA (geodetic latitude, longitude, altitude) from geocentric LLA
         with distance from Earth's center as the third coordinate (geocentric latitude, longitude, distance to Earth center).
@@ -505,7 +576,7 @@ class VirtualGNSS(VirtualSensor):
 
         return (geodetic_lat, input_coords[1], actual_alt)
 
-    def measure(self, true_coords_LLA):
+    def measure(self, true_coords_LLA: tuple):
         """
         Compute REC noisy positon output in LLA from input LLA coordinates.
 
