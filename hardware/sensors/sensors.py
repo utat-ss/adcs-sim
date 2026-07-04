@@ -38,7 +38,7 @@ class VirtualFSS(VirtualSensor):
 
     def __init__(self, cfg_file: Path):
         self.model: str = "Generic FSS"  # Model name
-        self.fov_deg: float = 0.0  # Half-cone field of view [deg]
+        self.fov_deg: float = 0.0 # Half-cone field of view [deg]
         self.rate_hz: float = 0.0  # Data rate [Hz]
         self.cov_deg2: np.ndarray = np.zeros((2, 2), dtype=float)  # Measurement covariance (2x2) [deg^2]
         self._load_cfg(cfg_file)
@@ -59,7 +59,7 @@ class VirtualFSS(VirtualSensor):
         with open(cfg_file, "r") as f:
             cfg = json.load(f)
         self.model = str(cfg.get("model", self.model))
-        self.fov_rad = float(cfg["fov_hcone_deg"])
+        self.fov_deg = float(cfg["fov_hcone_deg"])
         self.rate_hz = float(cfg["rate_hz"])
         self.cov_deg2 = np.asarray(cfg["cov_deg2"], dtype=float)
 
@@ -112,7 +112,7 @@ class VirtualFSS(VirtualSensor):
         """
         Determine whether the sun is being eclipsed by another body of a given radius
         in the satellite's reference frame. Assumes that such a body is closer than the sun
-        to the satellite.
+        to the satellite, and that the sun is a point source of light.
 
         Arguments:
             sat_vector:
@@ -153,18 +153,21 @@ class VirtualFSS(VirtualSensor):
 
     def measure(self, R_BS: np.ndarray, sun_vector: np.ndarray, earth_vector: np.ndarray, moon_vector: np.ndarray, r_mount = None) -> dict:
         """
-        Compute FSS angular output from sun, Earth, and moon vectors.
+        Compute FSS angular output from sun, Earth, and moon vectors. All arguments should be given in reference frames
+        which rotate with the satellite.
 
-        This method assumes:
-            incident_light = sun_pos - r_mount (optional)
+        Note 1: This method assumes:
+            incident_light = sun_pos - r_mount
 
-        Then the sensor mounting matrix is applied:
-            I_s = R_BS @ I_b
+            Then the sensor mounting matrix is applied:
+                I_s = R_BS @ I_b
+
+        Note 2: The sun is assumed to have negligible angular width in the FOV of the FSS throughout this method.
 
         Arguments:
 
             R_BS:
-                External mounting matrix turns from body frame to sensor frame
+                External mounting matrix turns from body frame to sensor frame.
 
             sun_vector:
                 3D sun position vector in body frame.
@@ -179,9 +182,9 @@ class VirtualFSS(VirtualSensor):
 
         Returns:
             Dictionary containing {
-                alpha_deg: signed x-z plane angle [deg]
-                beta_deg: signed y-z plane angle [deg]
-                sun_present: True if sun is inside FOV and not in eclipse
+                "alpha_deg" : signed x-z plane angle [deg].
+                "beta_deg" : signed y-z plane angle [deg].
+                "sun_present" : True if sun is inside FOV and not in eclipse.
             }
         """
 
@@ -216,9 +219,9 @@ class VirtualFSS(VirtualSensor):
         }
 
         if inside_fov:
-            if self.eval_eclipse(R_BS @ np.array([1,0,0]), sun_vector, earth_vector, 6378137.0): # references should be moved eventually to constants file
+            if self.eval_eclipse(R_BS @ np.array([0,0,1]), sun_vector, earth_vector, 6378137.0): # references should be moved eventually to constants file
                 return no_sun_dict
-            elif self.eval_eclipse(R_BS @ np.array([1,0,0]), sun_vector, moon_vector, 1737400.0):
+            elif self.eval_eclipse(R_BS @ np.array([0,0,1]), sun_vector, moon_vector, 1737400.0):
                 return no_sun_dict
         else:
             return no_sun_dict
@@ -289,6 +292,23 @@ class VirtualSTR(VirtualSensor):
             raise ValueError("Quaternion has zero norm.")
 
         return q / norm
+
+    @staticmethod
+    def _quat_conjugate(q: np.ndarray) -> np.ndarray:
+        """
+        Determine quaterion conjugate q' = [-x, -y, -z, w] from quaternion q = [x, y, z, w].
+        """
+        q = np.asarray(q, dtype=float)
+
+        if q.shape != (4,):
+            raise ValueError(f"Quaternion must have shape (4,), got {q.shape}")
+        
+        q[0] = -q[0]
+        q[1] = -q[1]
+        q[2] = -q[2]
+
+        return q
+
 
     @staticmethod
     def _quat_multiply(q1: np.ndarray, q2: np.ndarray) -> np.ndarray:
@@ -409,41 +429,36 @@ class VirtualSTR(VirtualSensor):
 
     def measure(self, q_true: np.ndarray, sun_vector: np.ndarray, earth_vector: np.ndarray, moon_vector: np.ndarray, cur_body_rate: float) -> np.ndarray:
         """
-        Return noisy measured attitude quaternion.
+        Return noisy measured attitude quaternion. All vector arguments should be in the same reference frame
+        as vectors to be transformed by q_true originate in, which does not rotate with the satellite.
 
         Arguments:
             q_true:
-                True attitude quaternion [x, y, z, w] from body frame to STR boresight frame.
+                True attitude quaternion [x, y, z, w].
 
             sun_vector:
-                3D sun position vector in body frame.
+                3D sun position vector in body frame which is not rotating with the satellite.
 
             earth_vector:
-                3D Earth position vector in body frame.
+                3D Earth position vector in body frame which is not rotating with the satellite.
 
             moon_vector:
-                3D moon position vector in body frame.
+                3D moon position vector in body frame which is not rotating with the satellite.
 
             cur_body_rate:
                 Current body rate [Hz].
 
         Returns:
-            q_meas:
-                Noisy measured attitude quaternion [x, y, z, w]. If any stellar bodies are present, 
+            Dictionary containing {
+                "q_meas" : Noisy measured attitude quaternion [x, y, z, w]. If any stellar bodies are present, 
                 or the maximum body rate is exceeded, q_meas is equal to the identity quaternion [0,0,0,1].
+                "rate_exceeded" : Boolean value, True if the STR's maximum allowable body rate has been exceeded.
+                "sun_in_exclusion" : Boolean value, True if the sun is in the STR's exclusion zone.
+                "earth_in_fov" : Boolean value, True if the Earth is in the STR's FOV.
+                "moon_in_fov" : Boolean value, True if the moon is in the STR's FOV.
+            }
         """
 
-        false_reading = np.array([0,0,0,1])
-
-        if self.eval_rate_exceeded(cur_body_rate):
-            return false_reading
-        elif self.eval_body_in_zone(q_true[0:3], sun_vector, 695700000.0, "exclusion"): # radius values should be moved eventually to constants file
-            return false_reading
-        elif self.eval_body_in_zone(q_true[0:3], earth_vector, 6378137.0, "regular"): # equatorial radius (class may give false negative near poles)
-            return false_reading
-        elif self.eval_body_in_zone(q_true[0:3], moon_vector, 1737400.0, "regular"):
-            return false_reading
-        
         q_true = self._normalize_quat(q_true)
 
         noise_rad = np.random.multivariate_normal(np.zeros(3), self.cov_rad2)
@@ -452,8 +467,35 @@ class VirtualSTR(VirtualSensor):
 
         q_meas = self._quat_multiply(q_true, dq)
 
-        return self._normalize_quat(q_meas)
+        return_dict = {
+            "q_meas" : self._normalize_quat(q_meas),
+            "sun_in_exclusion" : False,
+            "earth_in_fov" : False,
+            "moon_in_fov" : False,
+            "rate_exceeded": False
+        }
 
+        false_reading = np.array([0,0,0,1])
+        boresight_quat = np.array([1,0,0,0])
+
+        q_true_inv = self._quat_conjugate(q_true)
+
+        rotated_boresight_quat = self._quat_multiply(self._quat_multiply(q_true, boresight_quat),q_true_inv)
+
+        if self.eval_rate_exceeded(cur_body_rate):
+            return_dict["rate_exceeded"] = True
+            return_dict["q_meas"] = false_reading
+        if self.eval_body_in_zone(rotated_boresight_quat[0:3], sun_vector, 695700000.0, "exclusion"): # radius values should be moved eventually to constants file
+            return_dict["sun_in_exclusion"] = True
+            return_dict["q_meas"] = false_reading
+        if self.eval_body_in_zone(rotated_boresight_quat[0:3], earth_vector, 6378137.0, "regular"): # earth equatorial radius (class may give false positive near poles)
+            return_dict["earth_in_fov"] = True
+            return_dict["q_meas"] = false_reading
+        if self.eval_body_in_zone(rotated_boresight_quat[0:3], moon_vector, 1737400.0, "regular"):
+            return_dict["moon_in_fov"] = True
+            return_dict["q_meas"] = false_reading
+
+        return return_dict
 
 class VirtualIMU(VirtualSensor):
     """
