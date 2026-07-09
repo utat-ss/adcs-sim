@@ -15,6 +15,9 @@ You can run the simulator in the virtual environment using `uv run main.py`
 To add a package, simply `uv add <package>`.
 
 `uv` includes many other convenient features that you may find useful. You are encouraged to review the full documentation.
+### Running Tests
+
+Install the project in editable mode with development dependencies: `uv sync --extra dev` in order to run `uv run pytest`.
 
 ## Repo Usage
 ### Branching
