@@ -96,10 +96,6 @@ class VirtualFSS(VirtualSensor):
         beta_deg = np.rad2deg(beta_rad)
 
         noise = np.random.multivariate_normal(mean=np.zeros(2), cov=self.cov_deg2)
-        # TODO: self.cov_deg2 must follow the same ordering as the measurement vector:
-        #       [alpha_deg, beta_deg].
-        #       cov_deg2[0, 0] is Var(alpha), cov_deg2[1, 1] is Var(beta),
-        #       and cov_deg2[0, 1] / cov_deg2[1, 0] is Cov(alpha, beta).
         alpha_noise = noise[0]
         beta_noise = noise[1]
 
@@ -367,7 +363,7 @@ class VirtualSTR(VirtualSensor):
             body_vector: 
                 3D stellar body position vector.
 
-            body_name:
+            body_radius:
                 Radius of stellar body.
 
             fov_type:
@@ -391,24 +387,31 @@ class VirtualSTR(VirtualSensor):
         elif fov_type == "exclusion":
             zone_angle_rad = self.exclusion_rad / 2
 
-        body_angle = gc.angle_between_vectors(sat_vector, body_vector)
+        # determines the angle between the stellar body and boresight vectors:
+        body_angle = gc.angle_between_vectors(sat_vector, body_vector) 
 
-        body_vector_2D = gc.to_planar_vector(sat_vector, body_vector)
-        tangent_vectors_2D = gc.determine_circle_tangent_vectors(body_vector_2D, body_radius)
-        tangent_vectors_3D = (gc.from_planar_vector(sat_vector, body_vector, tangent_vectors_2D[0]), gc.from_planar_vector(sat_vector, body_vector, tangent_vectors_2D[1]))
-        tangent_angles = (gc.angle_between_vectors(sat_vector, tangent_vectors_3D[0]), gc.angle_between_vectors(sat_vector, tangent_vectors_3D[1]))
+        # returns 2D coordinates of the body vector projected onto a plane defined by the boresight and itself:
+        body_vector_2D = gc.to_planar_vector(sat_vector, body_vector) 
+        
+        # determines the two 2D vectors tangent to the circle representing the body considered within the defined planar coordinate system:
+        tangent_vectors_2D = gc.determine_circle_tangent_vectors(body_vector_2D, body_radius) 
+        
+        # converts the two 2D tangent vectors back into regular 3D Cartesian coordinates:
+        tangent_vectors_3D = (gc.from_planar_vector(sat_vector, body_vector, tangent_vectors_2D[0]), gc.from_planar_vector(sat_vector, body_vector, tangent_vectors_2D[1])) 
+        
+        # determines the angles between the each tangent vector and the boresight vector:
+        tangent_angles = (gc.angle_between_vectors(sat_vector, tangent_vectors_3D[0]), gc.angle_between_vectors(sat_vector, tangent_vectors_3D[1])) 
 
-        if body_angle <= zone_angle_rad:
+        inside_zone = (
+            body_angle <= zone_angle_rad 
+            or tangent_angles[0] <= zone_angle_rad
+            or tangent_angles[1] <= zone_angle_rad
+            or (body_angle < math.pi / 2 and (tangent_vectors_2D[0][1] > 0 and tangent_vectors_2D[1][1] < 0))
+            or (body_angle < math.pi / 2 and (tangent_vectors_2D[0][1] < 0 and tangent_vectors_2D[1][1] > 0))
+        )
+
+        if inside_zone:
             return True
-        elif tangent_angles[0] <= zone_angle_rad:
-            return True
-        elif tangent_angles[1] <= zone_angle_rad:
-            return True
-        elif body_angle < math.pi / 2:
-            if tangent_vectors_2D[0][1] > 0 and tangent_vectors_2D[1][1] < 0:
-                return True
-            elif tangent_vectors_2D[0][1] < 0 and tangent_vectors_2D[1][1] > 0:
-                return True
         return False
     
     def eval_rate_exceeded(self, cur_rate: float) -> bool:
