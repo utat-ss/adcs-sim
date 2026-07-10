@@ -1,7 +1,6 @@
-import numpy as np
-
-
 from __future__ import annotations
+
+import numpy as np
 
 from datetime import datetime, timezone
 from typing import Literal, Tuple
@@ -413,3 +412,22 @@ def rot_z(theta_rad: float) -> np.ndarray:
         [s, c, 0.0],
         [0.0, 0.0, 1.0]
     ], dtype=float)
+    
+    
+    
+# from datetime import datetime, timezone
+# import numpy as np
+
+# if __name__ == "__main__":
+#     dt = datetime(2026, 7, 2, 16, 0, 0, tzinfo=timezone.utc)
+
+#     # Example ECI position in meters
+#     r_eci = np.array([4477.723600, 3572.946785, -3810.652600])*1000  # Convert km to m
+#     lat, lon, alt = eci_to_lla(r_eci, dt) # SHould get ( -33.679 (deg)     -121.839 (deg)   508.594434 (km))
+#     print("Latitude [deg]:", lat)
+#     print("Longitude [deg]:", lon)
+#     print("Altitude [m]:", alt)
+    
+#     dt = datetime(2026, 8, 2, 16, 0, 0, tzinfo=timezone.utc)
+#     r_lla = lla_to_eci(81.808,       -4.578,    520.879883*1000, dt) # Should get (-962.322353,    -108.717240,    6809.549185) +-0.12 km
+#     print("ECI Position [m]:", r_lla)
