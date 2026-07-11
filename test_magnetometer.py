@@ -1,40 +1,68 @@
 '''
 Develop units tests for the MTM sensor model.
 '''
+from pathlib import Path
 
 import numpy as np
 import pytest
 
 from hardware.sensors.sensors import VirtualMTM
 
-def test_accurate_measurement_in_sensor_frame():
-    mtm = VirtualMTM()
+MTM_CFG = Path("hardware/sensors/icd/mtm/fss_15m.json")
 
-    mtm.lims_ut = [-800.0, 800.0]
-    mtm.bias_ut = 0.0
-    mtm.soft_iron = np.array([[1.0, 0.0, 0.0],
-                              [0.0, 1.0, 0.0],
-                              [0.0, 0.0, 1.0]])
+@pytest.fixture
+def mtm():
+    return VirtualMTM(MTM_CFG)
 
-    # test measured field and set expected field
+def test_loads_mtm_config(mtm):
+    assert mtm.lims_ut == [-800.0, 800.0]
+    assert mtm.bias_ut == 0.0
+    np.testing.assert_array_equal(mtm.soft_iron, np.array([[1.0, 0.0, 0.0],
+                                                           [0.0, 1.0, 0.0],
+                                                           [0.0, 0.0, 1.0]]))
+
+def test_accurate_measurement_in_sensor_frame(mtm):
     true_field = np.array([23.7, -15.2, 42.1])
-    measured_field = mtm.measure(true_field)
+    test_cases = [
+        # no rotation
+        {
+            "sensor_orientation": np.array([[1.0, 0.0, 0.0],
+                                            [0.0, 1.0, 0.0],
+                                            [0.0, 0.0, 1.0]]),
+            "expected_field": np.array([23.7, -15.2, 42.1])
+        },
+        
+        # rotation about the x-axis
+        {
+            "sensor_orientation": np.array([[1.0, 0.0, 0.0],
+                                            [0.0, -1.0, 0.0],
+                                            [0.0, 0.0, -1.0]]),
+            "expected_field": np.array([23.7, 15.2, -42.1])
+        },
 
-    expected_field = true_field
-    
-    # used assert_array_almost_equal in case of floating point precision issues
-    np.testing.assert_array_almost_equal(measured_field, expected_field, decimal=5)
+        # rotation about the y-axis
+        {
+            "sensor_orientation": np.array([[-1.0, 0.0, 0.0],
+                                            [0.0, 1.0, 0.0],
+                                            [0.0, 0.0, -1.0]]),
+            "expected_field": np.array([-23.7, -15.2, -42.1])
+        },
 
-def test_sensor_saturation_limit():
-    mtm = VirtualMTM()
+        # rotation about the z-axis
+        {
+            "sensor_orientation": np.array([[-1.0, 0.0, 0.0],
+                                            [0.0, -1.0, 0.0],
+                                            [0.0, 0.0, 1.0]]),
+            "expected_field": np.array([-23.7, 15.2, 42.1])
+        }
+    ]
+    
+    for case in test_cases:
+        measured_field = mtm.measure(true_field, case["sensor_orientation"])
 
-    mtm.lims_ut = [-800.0, 800.0]
-    mtm.bias_ut = 0.0
-    mtm.soft_iron = np.array([[1.0, 0.0, 0.0],
-                              [0.0, 1.0, 0.0],
-                              [0.0, 0.0, 1.0]])
-    
-    
+        np.testing.assert_array_almost_equal(measured_field, case["expected_field"], decimal=5)
+
+def test_sensor_saturation_limit(mtm):
     # test measured field and set expected field
     true_field = np.array([822.5, -880.9, 15.0])
     measured_field = mtm.measure(true_field)
@@ -44,7 +72,7 @@ def test_sensor_saturation_limit():
     # used assert_array_almost_equal in case of floating point precision issues
     np.testing.assert_array_almost_equal(measured_field, expected_field, decimal=5)
 
-def test_biases_and_distortions():
+def test_biases_and_distortions(mtm):
 
     # define tests
     test_cases = [
@@ -133,26 +161,16 @@ def test_biases_and_distortions():
 
     # test measured field and set expected field
     for case in test_cases:
-        mtm = VirtualMTM()
-        mtm.lims_ut = (-800.0, 800.0)
         mtm.bias_ut = case["bias"]
         mtm.soft_iron = case["soft_iron"]
 
         measured_field = mtm.measure(case["true_field"])
 
-        expected_field = (case["true_field"] @ mtm.soft_iron) + np.full(3, mtm.bias_ut)
+        expected_field = (mtm.soft_iron @ case["true_field"]) + np.full(3, mtm.bias_ut)
         expected_field = np.clip(expected_field, -800.0, 800.0)
         np.testing.assert_array_almost_equal(measured_field, expected_field, decimal=5)
 
-def test_noise_statistical_consistency():
-    mtm = VirtualMTM()
-
-    mtm.lims_ut = [-800.0, 800.0]
-    mtm.bias_ut = 0.0
-    mtm.soft_iron = np.array([[1.0, 0.0, 0.0],
-                              [0.0, 1.0, 0.0],
-                              [0.0, 0.0, 1.0]])
-    
+def test_noise_statistical_consistency(mtm):
     std = 0.015
 
     true_field = np.array([0.0, 0.0, 0.0])
@@ -187,15 +205,10 @@ def test_noise_statistical_consistency():
     assert within_3_std_percentage == pytest.approx(0.997, abs=0.05)
 
 
-def test_digitization_precision():
-    mtm = VirtualMTM()
+def test_digitization_precision(mtm):
     # not sure what the precision is, so this is a placeholder
     precision = 0.1
     mtm.precision = precision
-    mtm.bias_ut = 0.0
-    mtm.soft_iron = np.array([[1.0, 0.0, 0.0],
-                              [0.0, 1.0, 0.0],
-                              [0.0, 0.0, 1.0]])
 
     # Test inputs that should round down
     assert mtm.measure(np.array([1.11, 0.0, 0.0]))[0] == 1.1
