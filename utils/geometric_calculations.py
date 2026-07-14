@@ -88,6 +88,13 @@ def from_planar_vector(sat_vector: np.ndarray, body_vector_3D: np.ndarray, body_
 
     return unit_vect_1 * body_vector_2D[0] + unit_vect_2 * body_vector_2D[1]
 
+def planar_projection(vect, plane_normal):
+    """Compute the planar projection of 3D vector vect onto the plane defined by plane_normal."""
+    
+    plane_deviation = project_vector(vect, plane_normal)
+    projection = vect - plane_deviation
+    return projection
+
 def sphere_plane_intersection(sphere_pos_vect: np.ndarray, sphere_radius: float, plane_normal: np.ndarray) -> tuple:
     """Compute a tuple containing the 3D position vector of a circle
     representing the intersection between an origin-intersecting plane and a sphere, 
