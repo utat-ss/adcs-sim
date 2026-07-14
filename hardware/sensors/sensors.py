@@ -104,6 +104,69 @@ class VirtualFSS(VirtualSensor):
 
         return (alpha_deg, beta_deg)
     
+    def _angle_computation_general(self, sun_vector: np.ndarray, alpha_vector: np.ndarray = np.array([1,0,0]), beta_vector: np.ndarray = np.array([0,1,0])) -> tuple:
+        """
+        Compute FSS angular output from given sun_vector in any arbitrary 
+        coordinate system (defined by alpha_vector and beta_vector).
+
+        Note: boresight_vector = alpha_vector x beta_vector is the direction vector of the FSS boresight.
+
+        Arguments:
+            sun_vector:
+                3D sun direction vector.
+
+            alpha_vector:
+                3D direction vector indicating the direction of positive alpha angles.
+
+            beta_vector:
+                3D direction vector indicating the direction of positive beta angles.
+
+        Returns:
+            Tuple (alpha_deg, beta_deg) where:
+                alpha_deg: signed between projection of sun_vector onto beta plane and boresight_vector [deg]
+                beta_deg: signed between projection of sun_vector onto alpha plane and boresight_vector [deg]
+        """
+        sun_vector = np.asarray(sun_vector, dtype=float)
+        alpha_vector = np.asarray(alpha_vector, dtype=float)
+        beta_vector = np.asarray(beta_vector, dtype=float)
+
+        if sun_vector.shape != (3,) or np.linalg.norm(sun_vector) == 0.0:
+            raise ValueError("sun_vector must be a nonzero 3D vector.")
+        
+        if alpha_vector.shape != (3,) or np.linalg.norm(alpha_vector) == 0.0:
+            raise ValueError("alpha_vector must be a nonzero 3D vector.")
+        
+        if beta_vector.shape != (3,) or np.linalg.norm(beta_vector) == 0.0:
+            raise ValueError("beta_vector must be a nonzero 3D vector.")
+
+        if round(np.dot(alpha_vector, beta_vector), 10) != 0.0:
+            raise ValueError("Direction vectors for positive alpha and positive beta should be perpendicular.")
+        
+        boresight_vector = np.cross(alpha_vector, beta_vector)
+        proj_sun_alpha = gc.planar_projection(sun_vector, beta_vector)
+        proj_sun_beta = gc.planar_projection(sun_vector, alpha_vector)
+
+        alpha_rad = gc.angle_between_vectors(boresight_vector, proj_sun_alpha)
+        beta_rad = gc.angle_between_vectors(boresight_vector, proj_sun_beta)
+
+        if np.dot(alpha_vector, proj_sun_alpha) < 0:
+            alpha_rad *= -1
+
+        if np.dot(beta_vector, proj_sun_beta) < 0:
+            beta_rad *= -1
+
+        alpha_deg = np.rad2deg(alpha_rad)
+        beta_deg = np.rad2deg(beta_rad)
+
+        noise = np.random.multivariate_normal(mean=np.zeros(2), cov=self.cov_deg2)
+        alpha_noise = noise[0]
+        beta_noise = noise[1]
+
+        alpha_deg += alpha_noise
+        beta_deg += beta_noise
+
+        return (alpha_deg, beta_deg)
+    
     def eval_eclipse(self, sat_vector: np.ndarray, sun_vector: np.ndarray, body_vector: np.ndarray, body_radius: float) -> bool:
         """
         Determine whether the sun is being eclipsed by another body of a given radius
@@ -200,7 +263,7 @@ class VirtualFSS(VirtualSensor):
         incident_light_body = sun_vector - r_mount
         incident_light_sensor = R_BS @ incident_light_body
 
-        ab_angles_deg = self._angle_computation(incident_light_sensor)
+        ab_angles_deg = self._angle_computation_general(incident_light_sensor)
 
         inside_fov = (
             abs(ab_angles_deg[0]) <= self.fov_deg
