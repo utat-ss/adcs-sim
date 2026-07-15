@@ -1,57 +1,36 @@
-from utils import rot_x, rot_z
 import numpy as np
 from vispy import scene, visuals
-from orbit import KeplerianElements
-
+from orbit import KeplerianElements, keplerian2cartesian
 
 #Support Function
 def sample_true_anomaly(n_points: int = 800) -> np.ndarray:
-    """Generate true anomaly samples for one full orbit."""
+    """Generate true anomaly samples for one full orbit.
+    TODO: Replace with time anomaly sampling once available."""
     return np.linspace(0.0, 2 * np.pi, n_points)
-
-#Support Function
-def compute_radius(a_km: float, e: float, v: np.ndarray) -> np.ndarray:
-    """
-    Keplerian orbit radius equation.
-
-    TODO: Replace with orbit.true_anom2radius once available.
-    """
-    return a_km * (1 - e**2) / (1 + e * np.cos(v))
-
-#Support Function
-def perifocal_to_eci(points_pf: np.ndarray, kep: KeplerianElements) -> np.ndarray:
-    """
-    Convert perifocal coordinates to ECI frame.
-
-    TODO: Replace with orbit.keplerian2cartesian once implemented.
-    """
-    R = rot_z(kep.Om_rad) @ rot_x(kep.i_rad) @ rot_z(kep.om_rad)
-    return points_pf @ R.T
 
 #The Main Function 
 def keplerian_to_cartesian_orbit(
     kep: KeplerianElements,
-    n_points: int = 800
+    n_points: int = 800,
+    mu_km3_s2: float = 398600.4418
 ) -> np.ndarray:
-    """
-    Generate full Keplerian orbit as Cartesian ECI points.
 
-    NOTE:
-    - Uses true anomaly sampling (no time propagation)
-    - Pure Keplerian model (no perturbations)
-    """
-    v = sample_true_anomaly(n_points)
+    nus = sample_true_anomaly(n_points)
 
-    r = compute_radius(kep.a_km, kep.e, v)
+    orbit_points = []
 
-    # Perifocal frame
-    x_pf = r * np.cos(v)
-    y_pf = r * np.sin(v)
-    z_pf = np.zeros_like(v)
+    for nu in nus:
+        state = keplerian2cartesian(
+            kep,
+            nu,
+            mu_km3_s2
+        )
 
-    points_pf = np.column_stack((x_pf, y_pf, z_pf))
+        position = state[:3]      #as assumed by keplerian2cartesian
 
-    return perifocal_to_eci(points_pf, kep)
+        orbit_points.append(position)
+
+    return np.array(orbit_points, d_type=float)
 
 
 
@@ -124,9 +103,7 @@ def plot_keplerian_orbit(kep: KeplerianElements):
     canvas.app.run()
 
 
-# ============================================================
 # TEST RUN
-# ============================================================
 
 if __name__ == "__main__":
     kep = KeplerianElements(
