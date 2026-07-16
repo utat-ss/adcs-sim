@@ -1,28 +1,23 @@
 import numpy as np
 
-def j2_acceleration_m_s2(
-    r_eci_m: tuple[float, float, float],
-    mu_m3_s2: float = 3.986004418e14,
-    r_eq_m: float = 6378136.3,
-    j2: float = 1.08262668e-3,
-) -> tuple[float, float, float]:
+def j2_acceleration_m_s2(r_eci_m: tuple[float, float, float]) -> tuple[float, float, float]:
     """
     Calculate the J2 perturbative acceleration.
 
     Arguments:
     r_eci_m (tuple): x, y, z -> Earth-Centered Inertial position vector [meters].
-    mu_m3_s2 (float): Standard gravitational parameter [m^3/s^2].
-    r_eq_m (float): Mean equatorial radius of the body [meters].
-    j2 (float): Second zonal harmonic coefficient representing the effect of the Earth's oblateness [unitless].
 
     Returns:
     tuple: ax, ay, az -> acceleration due to Earth's J2 oblateness perturbation [m/s^2].
     """
     x, y, z = r_eci_m
     r_norm_m = np.linalg.norm(r_eci_m)
+    mu_m3_s2 = 3.986004418e14
+    r_eq_m = 6378136.3
+    j2 = 1.08262668e-3
 
-    if r_norm_m == 0:
-        raise ValueError("Position vector must be nonzero.")
+    if r_norm_m < r_eq_m + 100000:
+        raise ValueError("Position vector must be at least 100km above Earth's surface.")
 
     z2_over_r2 = (z**2) / (r_norm_m**2)
     factor = - 3 / 2 * (mu_m3_s2 * j2 * r_eq_m**2) / (r_norm_m**5)
@@ -36,19 +31,18 @@ def j2_acceleration_m_s2(
 
 def atmospheric_density_kg_m3(
     r_eci_m: tuple[float, float, float],
-    r_eq_m: float = 6378136.3,
 ) -> float:
     """
-    Calculate atmospheric density based on orbital state.
+    Calculate atmospheric density using NASA's Earth Atmosphere Model in metric units.
 
     Arguments:
     r_eci_m (tuple): x, y, z Earth-Centered Inertial position vector [m].
-    r_eq_m (float): Mean equatorial radius of Earth [m].
 
     Returns:
     float: Atmospheric density [kg/m^3].
     """
     r_norm_m = np.linalg.norm(r_eci_m)
+    r_eq_m = 6378136.3
 
     if r_norm_m == 0:
         raise ValueError("Position vector must be nonzero.")
@@ -58,9 +52,25 @@ def atmospheric_density_kg_m3(
     if altitude_m < 0:
         raise ValueError("Altitude must be nonnegative.")
 
-    sea_level_density_kg_m3 = 1.225
-    atmosphere_scale_m = 8500.0
+    # Atmospheric effects neglected above the stratosphere
+    if altitude_m > 50000:
+        return 0.0
 
-    density_kg_m3 = sea_level_density_kg_m3 * np.exp(-altitude_m / atmosphere_scale_m)
+    # Troposphere
+    elif altitude_m <= 11000:
+        temperature_c = 15.04 - 0.00649 * altitude_m
+        pressure_kpa = 101.29 * ((temperature_c + 273.1) / 288.08) ** 5.256
+
+    # Lower stratosphere
+    elif altitude_m <= 25000:
+        temperature_c = -56.46
+        pressure_kpa = 22.65 * np.exp(1.73 - 0.000157 * altitude_m)
+
+    # Upper stratosphere
+    else:
+        temperature_c = -131.21 + 0.00299 * altitude_m
+        pressure_kpa = 2.488 * ((temperature_c + 273.1) / 216.6) ** -11.388
+
+    density_kg_m3 = pressure_kpa / (0.2869 * (temperature_c + 273.1))
 
     return float(density_kg_m3)
