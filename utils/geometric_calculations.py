@@ -59,6 +59,8 @@ def to_planar_vector(sat_vector: np.ndarray, body_vector: np.ndarray) -> np.ndar
     """
     
     coord_1 = np.dot(sat_vector, body_vector) / np.linalg.norm(sat_vector)
+    # print(sat_vector, body_vector)
+    # print(coord_1, sat_vector[0]*body_vector[0], np.dot(sat_vector, body_vector), np.linalg.norm(sat_vector))
     temp = (np.linalg.norm(body_vector) ** 2) - (coord_1 ** 2)
     if temp < 0.0:
         temp = round(temp, 10)
@@ -88,15 +90,18 @@ def from_planar_vector(sat_vector: np.ndarray, body_vector_3D: np.ndarray, body_
 
     return unit_vect_1 * body_vector_2D[0] + unit_vect_2 * body_vector_2D[1]
 
-def planar_projection(vect, plane_normal):
-    """Compute the planar projection of 3D vector vect onto the plane defined by plane_normal."""
+def planar_projection(vect: np.ndarray, plane_normal: np.ndarray) -> np.ndarray:
+    """
+    Compute the planar projection of 3D vector vect onto the plane defined by plane_normal.
+    """
     
     plane_deviation = project_vector(vect, plane_normal)
     projection = vect - plane_deviation
     return projection
 
 def sphere_plane_intersection(sphere_pos_vect: np.ndarray, sphere_radius: float, plane_normal: np.ndarray) -> tuple:
-    """Compute a tuple containing the 3D position vector of a circle
+    """
+    Compute a tuple containing the 3D position vector of a circle
     representing the intersection between an origin-intersecting plane and a sphere, 
     followed by said circle's radius. The sphere is centered at sphere_pos_vect, and has
     radius sphere_radius, while the plane has the normal vector plane_normal.
@@ -114,3 +119,16 @@ def sphere_plane_intersection(sphere_pos_vect: np.ndarray, sphere_radius: float,
         proj_circle_radius = 0.0
 
     return (proj_circle_pos_vect, proj_circle_radius)
+
+def eval_vector_between_vectors(checked_vect: np.ndarray, boundary_vect_1: np.ndarray, boundary_vect_2: np.ndarray) -> bool:
+    """
+    Determine whether a given position vector checked_vect is within the cone 
+    defined by position vectors boundary_vect_1 and boundary_vect_2.
+    """
+    angle_between_boundaries = angle_between_vectors(boundary_vect_1, boundary_vect_2)
+    bound_to_checked_angle_1 = angle_between_vectors(checked_vect, boundary_vect_1)
+    bound_to_checked_angle_2 = angle_between_vectors(checked_vect, boundary_vect_2)
+
+    if round(angle_between_boundaries, 12) == round(bound_to_checked_angle_1 + bound_to_checked_angle_2, 12):
+        return True
+    return False
