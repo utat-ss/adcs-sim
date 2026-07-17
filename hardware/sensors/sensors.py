@@ -104,7 +104,7 @@ class VirtualFSS(VirtualSensor):
 
         return (alpha_deg, beta_deg)
     
-    def _angle_computation_general(self, sun_vector: np.ndarray, alpha_vector: np.ndarray = np.array([1,0,0]), beta_vector: np.ndarray = np.array([0,1,0])) -> tuple:
+    def _angle_computation_general(self, sun_vector: np.ndarray, alpha_vector: np.ndarray, beta_vector: np.ndarray) -> tuple:
         """
         Compute FSS angular output from given sun_vector in any arbitrary 
         coordinate system (defined by alpha_vector and beta_vector).
@@ -123,8 +123,8 @@ class VirtualFSS(VirtualSensor):
 
         Returns:
             Tuple (alpha_deg, beta_deg) where:
-                alpha_deg: signed between projection of sun_vector onto beta plane and boresight_vector [deg]
-                beta_deg: signed between projection of sun_vector onto alpha plane and boresight_vector [deg]
+                alpha_deg: signed angle between projection of sun_vector onto beta plane and boresight_vector [deg]
+                beta_deg: signed angle between projection of sun_vector onto alpha plane and boresight_vector [deg]
         """
         sun_vector = np.asarray(sun_vector, dtype=float)
         alpha_vector = np.asarray(alpha_vector, dtype=float)
@@ -146,8 +146,14 @@ class VirtualFSS(VirtualSensor):
         proj_sun_alpha = gc.planar_projection(sun_vector, beta_vector)
         proj_sun_beta = gc.planar_projection(sun_vector, alpha_vector)
 
-        alpha_rad = gc.angle_between_vectors(boresight_vector, proj_sun_alpha)
-        beta_rad = gc.angle_between_vectors(boresight_vector, proj_sun_beta)
+        alpha_rad = 0.0
+        beta_rad = 0.0
+        
+        if not np.allclose(proj_sun_alpha, np.zeros(3)):
+            alpha_rad = gc.angle_between_vectors(boresight_vector, proj_sun_alpha)
+        
+        if not np.allclose(proj_sun_beta, np.zeros(3)):
+            beta_rad = gc.angle_between_vectors(boresight_vector, proj_sun_beta)
 
         if np.dot(alpha_vector, proj_sun_alpha) < 0:
             alpha_rad *= -1
@@ -164,56 +170,12 @@ class VirtualFSS(VirtualSensor):
 
         alpha_deg += alpha_noise
         beta_deg += beta_noise
-
         return (alpha_deg, beta_deg)
-    
-    def eval_eclipse(self, sat_vector: np.ndarray, sun_vector: np.ndarray, body_vector: np.ndarray, body_radius: float) -> bool:
+
+    def measure(self, sun_vector: np.ndarray, sun_visibility: float, alpha_vector: np.ndarray = np.array([1,0,0]), beta_vector: np.ndarray = np.array([0,1,0]), R_BS: np.ndarray = np.array([[1,0,0],[0,1,0],[0,0,1]]), r_mount = None) -> dict:
         """
-        Determine whether the sun is being eclipsed by another body of a given radius
-        in the satellite's reference frame. Assumes that such a body is closer than the sun
-        to the satellite, and that the sun is a point source of light.
-
-        Arguments:
-            sat_vector:
-                3D direction vector of sun sensor boresight in body frame.
-
-            sun_vector:
-                3D sun position vector in body frame.
-
-            body_vector:
-                3D eclipsing body position vector in body frame.
-
-            body_radius:
-                Radius of eclipsing body.
-
-        Returns: Boolean value which is True when the sun is being eclipsed.
-        """
-
-        plane_normal = np.cross(sun_vector, sat_vector)
-        if np.allclose(plane_normal, np.zeros(3)): # Addresses case where sun is directly in front of sensor
-            if np.allclose(sun_vector / np.linalg.norm(sun_vector), np.array([1,0,0])):
-                plane_normal = np.cross(sun_vector, np.array([0,1,0]))
-            else:
-                plane_normal = np.cross(sun_vector, np.array([1,0,0]))
-                
-        proj_body_info = gc.sphere_plane_intersection(body_vector, body_radius, plane_normal)
-        
-        sun_vect_planar = gc.to_planar_vector(sat_vector, sun_vector)
-        body_vect_planar = gc.to_planar_vector(sat_vector, proj_body_info[0])
-
-        tangent_vects_planar = gc.determine_circle_tangent_vectors(body_vect_planar, proj_body_info[1])
-
-        sun_tangent_angles = (gc.angle_between_vectors(sun_vect_planar, tangent_vects_planar[0]), gc.angle_between_vectors(sun_vect_planar, tangent_vects_planar[1]))
-        tangent_tangent_angle = gc.angle_between_vectors(tangent_vects_planar[0], tangent_vects_planar[1])
-
-        if round(tangent_tangent_angle, 10) == round(sun_tangent_angles[0] + sun_tangent_angles[1], 10) and (not np.allclose(tangent_vects_planar[0], tangent_vects_planar[1])):
-            return True
-        return False
-
-    def measure(self, R_BS: np.ndarray, sun_vector: np.ndarray, earth_vector: np.ndarray, moon_vector: np.ndarray, r_mount = None) -> dict:
-        """
-        Compute FSS angular output from sun, Earth, and moon vectors. All arguments should be given in reference frames
-        which rotate with the satellite.
+        Compute FSS angular output from sun, alpha, and beta vectors. All arguments should be given in
+        a consistent Cartesian reference frame which moves with the satellite.
 
         Note 1: This method assumes:
             incident_light = sun_pos - r_mount
@@ -221,28 +183,30 @@ class VirtualFSS(VirtualSensor):
             Then the sensor mounting matrix is applied:
                 I_s = R_BS @ I_b
 
-        Note 2: The sun is assumed to have negligible angular width in the FOV of the FSS throughout this method.
-
         Arguments:
 
-            R_BS:
-                External mounting matrix turns from body frame to sensor frame.
-
             sun_vector:
-                3D sun position vector in body frame.
+                3D sun position vector in arbitrary Cartesian coordinate system.
 
-            earth_vector:
-                3D Earth position vector in body frame.
+            sun_visibility:
+                Float between 0.0 (full eclipse) to 1.0 (sun fully visible) representing the 
+                approximate fraction of sun visible to a satellite positioned at the origin.
 
-            moon_vector:
-                3D moon position vector in body frame.
+            alpha_vector:
+                3D direction vector indicating the direction of positive alpha angles.
 
-            r_mount: mounting position, usually negligible.
+            beta_vector:
+                3D direction vector indicating the direction of positive beta angles.
+                
+            R_BS:
+                External mounting matrix turns from body frame to sensor frame (if desired).
+                
+            r_mount: Mounting position, usually negligible.
 
         Returns:
             Dictionary containing {
-                "alpha_deg" : signed x-z plane angle [deg].
-                "beta_deg" : signed y-z plane angle [deg].
+                "alpha_deg" : signed angle between projection of sun_vector onto beta plane and boresight_vector [deg]
+                "beta_deg" : signed angle between projection of sun_vector onto alpha plane and boresight_vector [deg]
                 "sun_present" : True if sun is inside FOV and not in eclipse.
             }
         """
@@ -260,29 +224,29 @@ class VirtualFSS(VirtualSensor):
         if R_BS.shape != (3, 3):
             raise ValueError("R_BS must be a 3x3 matrix.")
 
-        incident_light_body = sun_vector - r_mount
-        incident_light_sensor = R_BS @ incident_light_body
-
-        ab_angles_deg = self._angle_computation_general(incident_light_sensor)
-
-        inside_fov = (
-            abs(ab_angles_deg[0]) <= self.fov_deg
-            and abs(ab_angles_deg[1]) <= self.fov_deg
-            and incident_light_sensor[2] > 0.0
-        )
-
         no_sun_dict = {
             "alpha_deg": 0.0,
             "beta_deg": 0.0,
             "sun_present": False,
         }
 
-        if inside_fov:
-            if self.eval_eclipse(R_BS @ np.array([0,0,1]), sun_vector, earth_vector, 6378137.0): # references should be moved eventually to constants file
-                return no_sun_dict
-            elif self.eval_eclipse(R_BS @ np.array([0,0,1]), sun_vector, moon_vector, 1737400.0):
-                return no_sun_dict
-        else:
+        sun_tolerance = 0.15 # Use more accurate value once known
+
+        if sun_visibility < sun_tolerance:
+            return no_sun_dict
+
+        incident_light_body = sun_vector - r_mount
+        incident_light_sensor = R_BS @ incident_light_body
+
+        ab_angles_deg = self._angle_computation_general(incident_light_sensor, R_BS @ alpha_vector, R_BS @ beta_vector)
+
+        inside_fov = (
+            abs(ab_angles_deg[0]) <= self.fov_deg
+            and abs(ab_angles_deg[1]) <= self.fov_deg
+            and np.dot(np.cross(alpha_vector, beta_vector), sun_vector) >= 0
+        )
+
+        if not inside_fov:
             return no_sun_dict
 
         return {
@@ -450,19 +414,19 @@ class VirtualSTR(VirtualSensor):
         elif fov_type == "exclusion":
             zone_angle_rad = self.exclusion_rad / 2
 
-        # determines the angle between the stellar body and boresight vectors:
+        # Determines the angle between the stellar body and boresight vectors:
         body_angle = gc.angle_between_vectors(sat_vector, body_vector) 
 
-        # returns 2D coordinates of the body vector projected onto a plane defined by the boresight and itself:
+        # Returns 2D coordinates of the body vector projected onto a plane defined by the boresight and itself:
         body_vector_2D = gc.to_planar_vector(sat_vector, body_vector) 
         
-        # determines the two 2D vectors tangent to the circle representing the body considered within the defined planar coordinate system:
+        # Determines the two 2D vectors tangent to the circle representing the body considered within the defined planar coordinate system:
         tangent_vectors_2D = gc.determine_circle_tangent_vectors(body_vector_2D, body_radius) 
         
-        # converts the two 2D tangent vectors back into regular 3D Cartesian coordinates:
+        # Converts the two 2D tangent vectors back into regular 3D Cartesian coordinates:
         tangent_vectors_3D = (gc.from_planar_vector(sat_vector, body_vector, tangent_vectors_2D[0]), gc.from_planar_vector(sat_vector, body_vector, tangent_vectors_2D[1])) 
         
-        # determines the angles between the each tangent vector and the boresight vector:
+        # Determines the angles between the each tangent vector and the boresight vector:
         tangent_angles = (gc.angle_between_vectors(sat_vector, tangent_vectors_3D[0]), gc.angle_between_vectors(sat_vector, tangent_vectors_3D[1])) 
 
         inside_zone = (
