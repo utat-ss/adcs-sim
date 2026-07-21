@@ -1,0 +1,10 @@
+{
+  "type": "FSS",
+  "model": "FSS-15",
+  "fov_hcone_deg": 60.0,
+  "rate_hz": 8.0,
+  "cov_deg2": [
+    [0.2, 0.0],
+    [0.0, 0.2]
+  ]
+}

@@ -1,0 +1,6 @@
+{
+    "type": "GNSS",
+    "model": "Orion B16",
+    "compatible_satellites": "GPS(L1), GLONASS(G1), Galileo(E1), BeiDou(B1), QZSS(L1), SBAS(L1/E1/B1/G1)",
+    "LLA_cov_matrix_meters": [[2.885390082, 0, 0], [0, 2.885390082, 0], [0, 0, 11.54156033]]
+  }

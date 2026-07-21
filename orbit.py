@@ -2,6 +2,7 @@
 
 from pydantic import BaseModel, field_validator, model_validator, ValidationInfo
 import numpy as np
+from constants import G, M
 
 class KeplerianElements(BaseModel):
     """
@@ -470,19 +471,27 @@ def mee_motion(me: ModifiedEquinoctialElements, L_rad: float, p_rsw_m2_s2: np.nd
 
     return medot
 
-def cowell_motion(x: np.ndarray, p_m2_s2: np.ndarray):
+def cowell_motion(x: np.ndarray, p_m_s2: np.ndarray) -> np.ndarray:
     """
     Calculate the orbital motion of a Cartesian state using Cowell's method.
 
     Arguments:
-    x:      (np.ndarray) (6x1) Orbital state vector.
-    p_m2_s2 (np.ndarray) (3x1) Perturbing accelerations.
+    x:      (np.ndarray) (6,) Orbital state vector. (x, y, z, v_x, v_y, v_z)
+    p_m_s2 (np.ndarray) (3,) Perturbing accelerations.
 
     Returns:
-    xdot:   (np.ndarray) (6x1) Orbit motion.
+    xdot:   (np.ndarray) (6,) Orbit motion.
     """
-    #TODO: Implementation
-    xdot = np.array([0., 0., 0., 0., 0., 0.])
+    mu = G*M
+
+    dr = x[3:6] # is shape (3,)
+
+    r_vec = x[0:3] # is shape (3,)
+    r_mag = np.linalg.norm(r_vec) # magnitude of r vector
+
+    dv = ( -mu*r_vec/(r_mag)**3 ) + p_m_s2
+    
+    xdot = np.concatenate((dr, dv))  # is shape (6,)
     return xdot
 
 def encke_motion(x: np.ndarray):

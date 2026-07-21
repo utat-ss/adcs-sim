@@ -1,5 +1,10 @@
 def main():
-    print("Hello from adcs-sim!")
+    # load simulator configuration
+
+    # load spacecraft configuration
+
+    # run simulation
+    return
 
 
 if __name__ == "__main__":
