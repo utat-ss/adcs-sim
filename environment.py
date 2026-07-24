@@ -1,4 +1,7 @@
+from datetime import datetime
+
 import numpy as np
+import pymsis
 
 def j2_acceleration_m_s2(r_eci_m: tuple[float, float, float]) -> tuple[float, float, float]:
     """
@@ -8,7 +11,7 @@ def j2_acceleration_m_s2(r_eci_m: tuple[float, float, float]) -> tuple[float, fl
     r_eci_m (tuple): x, y, z -> Earth-Centered Inertial position vector [meters].
 
     Returns:
-    tuple: ax, ay, az -> acceleration due to Earth's J2 oblateness perturbation [m/s^2].
+    ax, ay, az (tuple): acceleration due to Earth's J2 oblateness perturbation [m/s^2].
     """
     x, y, z = r_eci_m
     r_norm_m = np.linalg.norm(r_eci_m)
@@ -31,46 +34,57 @@ def j2_acceleration_m_s2(r_eci_m: tuple[float, float, float]) -> tuple[float, fl
 
 def atmospheric_density_kg_m3(
     r_eci_m: tuple[float, float, float],
+    epoch: datetime,
+    f107: float = 150.0,
+    f107a: float = 150.0,
+    ap: float = 4.0,
 ) -> float:
     """
-    Calculate atmospheric density using NASA's Earth Atmosphere Model in metric units.
+    Calculate atmospheric density using NRLMSIS.
 
     Arguments:
-    r_eci_m (tuple): x, y, z Earth-Centered Inertial position vector [m].
+    r_eci_m (tuple): x, y, z -> Earth-Centered Inertial position vector [meters].
+    epoch (datetime): YYYY, MM, DD, hh, mm, ss -> UTC datetime of the spacecraft position.
+    f107 (float): Daily 10.7 cm solar radio flux index [sfu].
+    f107a (float): 81-day centered average of the 10.7 cm solar radio flux index [sfu].
+    ap (float): Planetary geomagnetic activity index [2 nT].
 
     Returns:
-    float: Atmospheric density [kg/m^3].
+    float: Atmospheric mass density [kg/m^3].
     """
+    x, y, z = r_eci_m
     r_norm_m = np.linalg.norm(r_eci_m)
     r_eq_m = 6378136.3
-
-    if r_norm_m == 0:
-        raise ValueError("Position vector must be nonzero.")
-
     altitude_m = r_norm_m - r_eq_m
 
-    if altitude_m < 0:
+    if r_norm_m == 0.0:
+        raise ValueError("Position vector must be nonzero.")
+
+    if altitude_m < 0.0:
         raise ValueError("Altitude must be nonnegative.")
 
-    # Atmospheric effects neglected above the stratosphere
-    if altitude_m > 50000:
-        return 0.0
+    longitude_deg = np.degrees(np.arctan2(y, x))
+    latitude_deg = np.degrees(
+        np.arctan2(z, np.sqrt(x * x + y * y))
+    )
 
-    # Troposphere
-    elif altitude_m <= 11000:
-        temperature_c = 15.04 - 0.00649 * altitude_m
-        pressure_kpa = 101.29 * ((temperature_c + 273.1) / 288.08) ** 5.256
+    dates = np.array([epoch], dtype="datetime64[us]")
+    lons = np.array([longitude_deg])
+    lats = np.array([latitude_deg])
+    alts = np.array([altitude_m / 1000.0])
 
-    # Lower stratosphere
-    elif altitude_m <= 25000:
-        temperature_c = -56.46
-        pressure_kpa = 22.65 * np.exp(1.73 - 0.000157 * altitude_m)
+    # pymsis returns densities in cm^-3
+    output = pymsis.calculate(
+        dates,
+        lons,
+        lats,
+        alts,
+        f107s=np.array([f107]),
+        f107as=np.array([f107a]),
+        aps=np.array([ap]),
+        version=2.1,
+    )
 
-    # Upper stratosphere
-    else:
-        temperature_c = -131.21 + 0.00299 * altitude_m
-        pressure_kpa = 2.488 * ((temperature_c + 273.1) / 216.6) ** -11.388
+    total_mass_density_g_cm3 = output[0, 0, 0, 0]
 
-    density_kg_m3 = pressure_kpa / (0.2869 * (temperature_c + 273.1))
-
-    return float(density_kg_m3)
+    return float(total_mass_density_g_cm3 * 1000.0)
