@@ -15,6 +15,9 @@ RAD_EARTH = 6378137.0
 RAD_MOON = 1737400.0
 
 def test_loads_config():
+    """
+    Verify that STR parameters taken from the config file used are correct.
+    """
     str = VirtualSTR(STR_CFG)
     
     assert str.type == "STR"
@@ -24,7 +27,12 @@ def test_loads_config():
     assert str.rate_hz == pytest.approx(10.0)
     assert str.cov_rad2.shape == (3, 3)
 
-def get_cone_edge_angles(str, q, body_start, body_end, body_name, step_num):
+def get_cone_edge_angles(str: VirtualSTR, q: np.ndarray, body_start: np.ndarray, body_end: np.ndarray, body_name: str, step_num: int) -> list:
+    """
+    Determine the angles (between a body's position vector and the STR boresight vector) at which
+    the body given by body_name is just outside the STR's FOV/exclusion cone as the body moves
+    from position body_start to position body_end in step_num increments.
+    """
     str = VirtualSTR(STR_CFG)
 
     body_inc = (body_end - body_start) / step_num
@@ -75,6 +83,10 @@ def get_cone_edge_angles(str, q, body_start, body_end, body_name, step_num):
     return end_angles
 
 def test_sun_in_exclusion():
+    """
+    Verify whether the "sun_in_exclusion" parameter of STR measurements evaluates to True 
+    in the appropriate conditions as the sun moves along several straight predefined paths.
+    """
     str = VirtualSTR(STR_CFG)
 
     q = np.array([0,1,0,0])
@@ -94,7 +106,11 @@ def test_sun_in_exclusion():
 
     # More tests can be added if desired
 
-def test_earth_in_FOV():
+def test_earth_in_fov():
+    """
+    Verify whether the "earth_in_fov" parameter of STR measurements evaluates to True 
+    in the appropriate conditions as the earth moves along several straight predefined paths.
+    """
     str = VirtualSTR(STR_CFG)
 
     q = np.array([0,1,0,0])
@@ -106,9 +122,19 @@ def test_earth_in_FOV():
     assert end_angles[0] == pytest.approx(0.316852609851, abs=0.001)
     assert end_angles[1] == pytest.approx(0.316852609851, abs=0.001)
 
+    earth_vec_start = np.array([RAD_EARTH * -10, RAD_EARTH * 3.5, RAD_EARTH * 100])
+    earth_vec_end = np.array([RAD_EARTH * -10, RAD_EARTH * 3.5, RAD_EARTH * -100])
+    end_angles = get_cone_edge_angles(str, q, earth_vec_start, earth_vec_end, "earth", 10000)
+
+    assert len(end_angles) == 0
+
     # More tests can be added if desired
 
-def test_moon_in_FOV():
+def test_moon_in_fov():
+    """
+    Verify whether the "moon_in_fov" parameter of STR measurements evaluates to True 
+    in the appropriate conditions as the moon moves along several straight predefined paths.
+    """
     str = VirtualSTR(STR_CFG)
 
     q = np.array([0,1,0,0])
@@ -120,29 +146,43 @@ def test_moon_in_FOV():
     assert end_angles[0] == pytest.approx(0.248082125761, abs=0.001)
     assert end_angles[1] == pytest.approx(0.248082125761, abs=0.001)
 
+    moon_vec_start = np.array([RAD_EARTH * -10, RAD_EARTH * 3, RAD_EARTH * 100])
+    moon_vec_end = np.array([RAD_EARTH * -10, RAD_EARTH * 3, RAD_EARTH * -100])
+    end_angles = get_cone_edge_angles(str, q, moon_vec_start, moon_vec_end, "moon", 10000)
+
+    assert len(end_angles) == 0
+
     # More tests can be added if desired
 
 def test_STR_rate_exceeded():
+    """
+    Verify that the STR class returns appropriate data at various body_rate values.
+    """
     str = VirtualSTR(STR_CFG)
 
-    q = np.array([0,0,0,1])
-    sun_vec = np.array([0,0,RAD_SUN * 10])
-    earth_vec = np.array([0,0,RAD_EARTH * 10])
-    moon_vec = np.array([0,0,RAD_MOON * 10])
+    q = np.array([0,1,0,0])
+    sun_vec = np.array([0, 0, RAD_SUN * 10])
+    earth_vec = np.array([0, 0, RAD_EARTH * 10])
+    moon_vec = np.array([0, 0, RAD_MOON * 10])
     body_rate = 0.0
     
     while body_rate < 100.0:
         res = str.measure(q, sun_vec, earth_vec, moon_vec, body_rate)
         if body_rate > 10.0:
             assert res["rate_exceeded"] == True
+            assert np.array_equal(res["q_meas"], np.array([0,0,0,1]))
         else:
             assert res["rate_exceeded"] == False
 
         body_rate += 0.1
 
 def test_noise_consistency():
+    """
+    Verify that the STR class returns quaternions with statistically consistent noise. 
+    Test may take up to a minute to run.
+    """
     str = VirtualSTR(STR_CFG)
-    
+
     sun_vect = np.array([RAD_SUN*10, RAD_SUN*10, RAD_SUN*10])
     earth_vect = np.array([RAD_EARTH*(-10), RAD_EARTH*10, RAD_EARTH*10])
     moon_vect = np.array([RAD_MOON*10, RAD_MOON*10, RAD_MOON*(-10)])
