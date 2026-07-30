@@ -306,6 +306,12 @@ class VirtualIMU(VirtualSensor):
         self.angle_random_walk_deg_sqrthr: float = 0.0
         self.rate_random_walk_rad_s2_sqrthz: float = 0.0
         self.rate_hz: float = 0.0
+        self.tau_s: float = 300.0  # Gauss-Markov correlation time constant
+
+        self._rrw_state = np.zeros(3)
+        self._gauss_markov = np.zeros(3)
+        self._last_t: float | None = None
+        self._last_measurement = np.zeros(3)
 
     def _load_cfg(self, cfg_file: Path):
         """
@@ -319,7 +325,61 @@ class VirtualIMU(VirtualSensor):
         """
         with open(cfg_file, 'r') as f:
             raise NotImplementedError()
+    
+    def measure(self, omega_true: np.ndarray, t):
+        """
+        Takes the true satellite spin and returns a noisy data measurement vector.
 
+        omega_true: 1D array of current true angular velocities [omega_x, omega_y, omega_z]
+        t: current simulation time (seconds), used to compute actual elapsed time.
+        """
+
+        gyro_lower_limit, gyro_higher_limit = self.gyro_lims_rad_s
+
+        # first call: initialize variables and return clipped omega_true
+        if self._last_t is None:
+            self._last_t = t
+            omega_limited = np.clip(omega_true, gyro_lower_limit, gyro_higher_limit)
+            self._last_measurement = omega_limited
+            return omega_limited
+        
+        dt = t - self._last_t # time Step between logged points
+
+        # for evaluate dynamics before commiting a step
+        if dt <= 0:
+            return self._last_measurement
+
+        ''' calculate bias_N for angle_random_walk '''
+        angle_random_walk_rad_sqrts = self.angle_random_walk_deg_sqrthr * (np.pi / 10800.0) #Convert to rad/sqrt(s)
+        angle_random_walk_deviation = angle_random_walk_rad_sqrts / np.sqrt(dt)
+        noise_N = np.random.normal(0, angle_random_walk_deviation, 3)
+        
+        ''' calculate bias_K for the rate_random_walk adjectment '''
+        rrw_std = self.rate_random_walk_rad_s2_sqrthz * np.sqrt(dt)
+        self._rrw_state += np.random.normal(0.0, rrw_std, size=3)
+        bias_K = self._rrw_state
+
+        ''' calculate bias_B for bias_instability '''
+        bias_instability_rad_hr = self.bias_instability_deg_hr * (np.pi / 180.0) / 3600.0
+        alpha = np.exp(-dt /self.tau_s)
+        noise_var = bias_instability_rad_hr ** 2 * (1 - np.exp(-2 * dt / self.tau_s))
+        noise_std = noise_var ** 0.5
+        random_bias = np.random.normal(0.0, noise_std, size=3)
+
+        self._gauss_markov = alpha * self._gauss_markov + random_bias
+        bias_B = self._gauss_markov
+        
+        # adjust for omega with biases
+        omega_adjusted = omega_true + noise_N + bias_K + bias_B
+
+        ''' adjust for gyro_lims_rad_s '''
+        omega_limited = np.clip(omega_adjusted, gyro_lower_limit, gyro_higher_limit)
+
+        # update all variables for next iteration
+        self._last_t = t
+        self._last_measurement = omega_limited
+        return omega_limited
+        
 
 class VirtualMTM(VirtualSensor):
     """
