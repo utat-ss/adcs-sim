@@ -2,8 +2,9 @@
 
 from pydantic import BaseModel, field_validator, model_validator, ValidationInfo
 import numpy as np
-from constants import G, M, mu, e
+from constants import G, M, mu
 from collections.abc import Callable
+from root_finding import *
 
 class KeplerianElements(BaseModel):
     """
@@ -433,35 +434,6 @@ def cartesian2keplerian(x: np.ndarray, mu_km3_s2: float) -> tuple[KeplerianEleme
 
     return kep, nu_rad
 
-def newton_method(x_n: float, func: Callable[[float], float], d_func: Callable[[float], float], 
-                  tolerance: float = 1e-10, max_iter: int = 20) -> float:
-    """
-    Newton's method, root finder. Used to solve transcendental function.
-    
-    Arguments:
-    x_n:         (float) nth guess of root of equation
-    func:        The function to solve
-    d_func:      Derivative of the function to solve
-    tolerance:   How precise the answer should be
-    max_iter:    Maximum number of times to iterate
-
-    Output:
-    x_new:  n+1th guess of root of equation
-    """
-
-    for _ in range(max_iter):
-        f = func(x_n)
-        df = d_func(x_n)
-        x_new = x_n - (f / df)
-
-        if abs(x_new - x_n) < tolerance:
-            return x_new
-            # no longer changing the estimation enough to be meaningful
-        
-        x_n = x_new # update x to next step
-        
-    return x_n
-
 
 def kepler_motion(kep: KeplerianElements, t: float):
     """
@@ -478,6 +450,7 @@ def kepler_motion(kep: KeplerianElements, t: float):
     a = kep.a_km
     n = np.sqrt(mu/a**3) # mean motion
     M = n*(t) 
+    e = kep.e
     # in the normal formula: tp = time of periapsis, t = current time, and M = n*(t-tp)
     # but here the t is already current time - time of periapsis, so we pass that in
 
@@ -558,29 +531,33 @@ def cowell_motion(x: np.ndarray, p_m_s2: np.ndarray) -> np.ndarray:
     xdot = np.concatenate((dr, dv))  # is shape (6,)
     return xdot
 
-def encke_motion(t: float, r: np.ndarray, x: np.ndarray, p_m_s2: np.ndarraywai):
+def encke_motion(t: float, state: list[np.ndarray], p_m_s2: np.ndarray):
     """
     Calculate the orbital motion of a Cartesian state using Encke's method.
 
     Arguments:
-    r: (np.ndarray) (6,) (r, v).
-    x: (np.ndarray) (6,) (delta_r, delta_r_dot) (deviation).
+    state: augmented state vector, list of 2 np.ndarrays, 
+        1. x: (np.ndarray) (delta_r, delta_r_dot) (deviation).
+        2, r: (np.ndarray) (6,) (r, v).
     p_m_s2: (np.ndarray) (3,) Perturbing accelerations.
 
     Returns:
     xdot:   (np.ndarray) (6,)  (delta_r, delta_r_dot) (deviation's derivative).
     """
+
+    x = state[0:5]
+    r = state[6:11]
     r_vec = r[0:3]
     r_mag = np.linalg.norm(r_vec) # magnitude of r vector
 
-    kep = cartesian2keplerian(r, mu) # for now assume we are only doing encke motion for orbit around sun
-    r_osc_mag = kepler_motion(kep, t) # magnitude of r_osc vector, distance from central body to spacecraft
+    kep = cartesian2keplerian(r, mu) # for now assume we are only doing encke motion for orbit around Earth
+    r_osc = kepler_motion(kep, t) # r_osc is distance from center of primary body to the spacecraft along the osculating (unperturbed) orbit
 
     delta_r_dot = x[3:6] # (3,)
 
     delta_r = x[0:3] # (3,)
 
-    a = -mu/r_osc_mag**3 # (1, )
+    a = -mu/r_osc**3 # (1, )
     b = 2*r_vec - delta_r  # (3, )
     c = np.dot(delta_r, b) # (1, )
     d = c / (r_mag**2) # (1, )
