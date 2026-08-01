@@ -3,8 +3,16 @@
 from pydantic import BaseModel, field_validator, model_validator, ValidationInfo
 import numpy as np
 from constants import G, M, mu
+from typing import Literal, Union
 from collections.abc import Callable
 from root_finding import *
+
+class CartesianState(BaseModel):
+    """
+    Cartesian State (r, v) for a specified orbit.
+    """ 
+    r: np.ndarray # (3,) position, [km]
+    v: np.ndarray # (3,) velocity, [km/s]
 
 class KeplerianElements(BaseModel):
     """
@@ -75,6 +83,13 @@ class ModifiedEquinoctialElements(BaseModel):
 
     def as_array(self):
         return np.array([self.p_km, self.f, self.g, self.h, self.k])
+
+
+# Union all formats for ease of config for simulation
+class InitialStateConfig(BaseModel):
+    type: Literal["keplerian", "cartesian", "equinoctial"]
+    state: KeplerianElements | CartesianState | EquinoctialElements | ModifiedEquinoctialElements
+
 
 def keplerian2equinoctial(kep: KeplerianElements) -> EquinoctialElements:
     """
