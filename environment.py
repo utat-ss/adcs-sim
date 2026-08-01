@@ -88,3 +88,40 @@ def atmospheric_density_kg_m3(
     total_mass_density_g_cm3 = output[0, 0, 0, 0]
 
     return float(total_mass_density_g_cm3 * 1000.0)
+
+def aerodynamic_drag_perturbation_m_s2(
+    velocity_m_s: np.ndarray,
+    velocity_atm_m_s: np.ndarray,
+    air_kg_m3: float,
+    drag_coeff: float,
+    area_m_2: float,
+    mass_kg: float,
+) -> np.ndarray:
+    """
+    Calculate acceleration due to aerodynamic drag.
+
+    velocity_m_s (np.ndarray): vx, vy, vz -> Satellite velocity vector [m/s].
+    velocity_atm_m_s (np.ndarray): v_atm_x, v_atm_y, v_atm_z -> Atmosphere velocity vector [m/s].
+    air_kg_m3 (float): Air density [kg/m^3].
+    drag_coeff (float): Drag coefficient.
+    area_m_2 (float): Cross-sectional area [m^2].
+    mass_kg (float): Satellite mass in kg.
+    
+    Returns:
+    ax, ay, az (np.ndarray): Acceleration vector due to drag [m/s^2].
+    """
+    if mass_kg <= 0:
+        raise ValueError("Mass must be positive.")
+    elif area_m_2 < 0 or drag_coeff < 0:
+        raise ValueError("Cross-sectional area must be non-negative.")
+    elif air_kg_m3 < 0:
+        raise ValueError("Air density must be non-negative.")
+    elif drag_coeff < 0:
+        raise ValueError("Drag coefficient must be non-negative.")
+
+    v_relative_m_s = velocity_m_s - velocity_atm_m_s
+    speed = np.linalg.norm(v_relative_m_s)
+
+    factor = -(0.5 * air_kg_m3 * drag_coeff * area_m_2) / mass_kg
+
+    return factor * speed * v_relative_m_s
