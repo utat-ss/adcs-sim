@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from scipy.integrate import sovle_ivp
+from scipy.integrate import solve_ivp
 
 from attitude import(
     skew,
@@ -18,6 +18,11 @@ from attitude import(
     3. angular momentum change matches torque
 '''
 
+def make_unit_quaternion(epsilon):
+    epsilon0 = np.asarray(epsilon, dtype=float)
+    eta0 = np.sqrt(1 - np.linalg.norm(epsilon0)**2)
+    return epsilon0, eta0
+
 # Unit tests
 # Test 1: Checking if skew produces the correct matrix
 def test_skew_known_vector(): #test the skew function under the condition that the vector is known
@@ -33,7 +38,7 @@ def test_skew_known_vector(): #test the skew function under the condition that t
     result = skew(b)
     
     # Assert
-    np.resting.assert_allclose(result, expected) #check if two values equal within a small tolerance
+    np.testing.assert_allclose(result, expected) #check if two values equal within a small tolerance
 
 # Test 2: Checking if the matrix is skew-symmetric
 def test_skew_is_skew_symmetric():
@@ -62,8 +67,7 @@ def test_skew_equivalent_to_cross_product():
 # Test 4: Checking if attitude_kinematics works with zero angular velocity
 def test_attitude_kinematics_zero_angular_velocity():
     # Arrange
-    epsilon = np.array([0.1, 0.2, 0.3])
-    eta = np.sqrt(1 - np.linalg.norm(epsilon)**2)
+    epsilon, eta = make_unit_quaternion([0.1, 0.2, 0.3])
     omega = np.zeros(3)
 
     # Act
@@ -94,7 +98,7 @@ def test_attitude_kinematics_identity_quaternion():
     np.testing.assert_allclose(eta_dot, 0.0)
 
 # Test 6: Checking if attitude_dynamics works with zero torque and zero angular velocity
-def test_attitude_dunamics_zero_input():
+def test_attitude_dynamics_zero_input():
     # Arrange
     omega = np.zeros(3)
     J = np.eye(3)
@@ -113,25 +117,24 @@ def test_attitude_dynamics_identity_inertia():
     omega = np.array([1.0, 2.0, 3.0])
     J = np.eye(3)
     Jinv = np.linalg.inv(J)
-    torque = np.array([[0.1], [0.2], [0.3]])
+    torque = np.array([0.1, 0.2, 0.3])
 
     # Act
     omega_dot = attitude_dynamics(omega, J, Jinv, torque)
     
     # Assert
-    np.testing.assert_allclose(omega_dot, torque.flatten())
+    np.testing.assert_allclose(omega_dot, torque)
 
 # Test 8: Checking if dynamics unpacks the state vector correctly
 def test_dynamics_structure_and_slicing():
     # Arrange
-    epsilon = np.array([0.1, 0.2, 0.3])
-    eta = 0.9
+    epsilon, eta = make_unit_quaternion([0.1, 0.2, 0.3])
     omega = np.array([1.0, 2.0, 3.0])
 
     x = np.concatenate([epsilon, [eta], omega])
 
     J = np.eye(3)
-    torque = np.zeros((3, 1))
+    torque = np.zeros(3)
     t = 0.0
 
     # Act
@@ -151,8 +154,7 @@ def test_dynamics_structure_and_slicing():
 # Test 1: Checking if quaternion remains unit length (||q|| = 1)
 def test_quaternion_norm_preservation():
     # Arrange
-    epsilon0 = np.array([0.1, 0.0, 0.0])
-    eta0 = np.sqrt(1 - np.linalg.norm(epsilon0)**2)
+    epsilon0, eta0 = make_unit_quaternion([0.1, 0.0, 0.0])
     omega0 = np.array([0.01, 0.02, 0.0])
 
     x0 = np.concatenate([epsilon0, [eta0], omega0])
@@ -164,7 +166,7 @@ def test_quaternion_norm_preservation():
 
     # Act
     sol = solve_ivp(
-        lambda t, x: dynamics(t, x, J, torque)
+        lambda t, x: dynamics(t, x, J, torque),
         t_span,
         x0,
         method = "RK45"
@@ -180,13 +182,12 @@ def test_quaternion_norm_preservation():
     )
 
     # Assert
-    np.testing.assert_allclose(q_norm, 1.0, atol=1e-2)
+    np.testing.assert_allclose(q_norm, 1.0, atol=1e-9)
 
 # Test 2: Checking if angular momentum is conserved (torque = 0)
 def test_angular_momentum_conservation():
     # Arrange
-    epsilon0 = np.array([0.1, 0.2, 0.3])
-    eta0 = np.sqrt(1 - np.linalg.norm(epsilon0)**2)
+    epsilon0, eta0 = make_unit_quaternion([0.1, 0.2, 0.3])
     omega0 = np.array([1.0, 2.0, 3.0])
 
     x0 = np.concatenate([epsilon0, [eta0], omega0])
@@ -196,7 +197,7 @@ def test_angular_momentum_conservation():
 
     # Act
     sol = solve_ivp(
-        lambda t, x: dynamics(t, x, J, torque)
+        lambda t, x: dynamics(t, x, J, torque),
         (0, 50),
         x0,
         method = "RK45"
@@ -211,13 +212,12 @@ def test_angular_momentum_conservation():
     error = np.linalg.norm(H - H0, axis=1)
 
     # Assert
-    np.testing.assert_allclose(error, 0.0, atol=1e-2)
+    np.testing.assert_allclose(error, 0.0, atol=1e-9)
 
 # Test 3: Checking if rate of change of angular momentum matches torque
 def test_torque_matches_angular_momentum_rate():
     # Arrange
-    epsilon0 = np.array([0.1, 0.2, 0.3])
-    eta0 = np.sqrt(1 - np.linalg.norm(epsilon0)**2)
+    epsilon0, eta0 = make_unit_quaternion([0.1, 0.2, 0.3])
     omega0 = np.array([0.5, -0.3, 0.2])
 
     x0 = np.concatenate([epsilon0, [eta0], omega0])
