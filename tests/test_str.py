@@ -33,7 +33,6 @@ def get_cone_edge_angles(str: VirtualSTR, q: np.ndarray, body_start: np.ndarray,
     the body given by body_name is just outside the STR's FOV/exclusion cone as the body moves
     from position body_start to position body_end in step_num increments.
     """
-    str = VirtualSTR(STR_CFG)
 
     body_inc = (body_end - body_start) / step_num
 
