@@ -255,7 +255,8 @@ class VirtualSTR(VirtualSensor):
         model: str
         fov_full_cone_rad: float
         exclusion_full_cone_rad: float
-        rate_hz: float
+        max_sensor_update_rate_hz: float
+        max_total_body_rate_rad/s: float
         cov_matrix_rad2: [[float, float, float], [float, float, float], [float, float, float]]
     """
 
@@ -264,7 +265,8 @@ class VirtualSTR(VirtualSensor):
         self.model: str = "Generic STR"
         self.fov_rad: float = 0.0
         self.exclusion_rad: float = 0.0
-        self.rate_hz: float = 0.0
+        self.max_update_rate_hz: float = 0.0
+        self.max_body_rate_radhz: float = 0.0
 
         # Measurement covariance matrix for [roll, pitch, yaw] in rad^2
         self.cov_rad2: np.ndarray = np.array([[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]], dtype=float)
@@ -286,7 +288,8 @@ class VirtualSTR(VirtualSensor):
         self.model = str(cfg.get("model", self.model))
         self.fov_rad = float(cfg["fov_full_cone_rad"])
         self.exclusion_rad = float(cfg["exclusion_full_cone_rad"])
-        self.rate_hz = float(cfg["rate_hz"])
+        self.max_update_rate_hz = float(cfg["max_sensor_update_rate_hz"])
+        self.max_body_rate_radhz = float(cfg["max_total_body_rate_rad/s"]) # With Sagitta, should be ~2.5 deg/s
         self.cov_rad2 = np.asarray(cfg["cov_matrix_rad2"], dtype=float)
         self.cov_diag = np.diag(self.cov_rad2)
 
@@ -353,24 +356,26 @@ class VirtualSTR(VirtualSensor):
             return True
         return False
     
-    def eval_rate_exceeded(self, cur_rate: float) -> bool:
+    def eval_rate_exceeded(self, body_rates: np.ndarray) -> bool:
         """
-        Determine whether the maximum body rate at which the STR can make measurements has been exceeded.
+        Determine whether the maximum total body rate at which the STR can make measurements has been exceeded.
 
         Arguments: 
-            cur_rate: 
-                Current body rate [Hz].
+            body_rates:
+                Current body rates [x_rate, y_rate, z_rate] along each axis in rad/s, 
+                relative to a satellite-fixed non-rotating reference frame.
 
         Returns: Boolean value which is True when the current body rate is greater than the known maximum.
         """
-        max_rate = self.rate_hz
+        max_rate = self.max_body_rate_radhz
+        body_rate_vec_sum = np.linalg.norm(body_rates)
         
-        if cur_rate > max_rate:
+        if body_rate_vec_sum > max_rate:
             return True
         return False
 
-    def measure(self, q_true: np.ndarray, sun_vector: np.ndarray, earth_vector: np.ndarray, 
-                moon_vector: np.ndarray, cur_body_rate: float) -> dict:
+    def measure(self, q_true: np.ndarray, body_rates: np.ndarray, sun_vector: np.ndarray, 
+                earth_vector: np.ndarray, moon_vector: np.ndarray) -> dict:
         """
         Return noisy measured attitude quaternion. All vector arguments should be in a satellite-fixed 
         non-rotating reference frame, with q_true transforming between this frame and a frame rotating
@@ -380,6 +385,10 @@ class VirtualSTR(VirtualSensor):
             q_true:
                 True attitude quaternion [x, y, z, w].
 
+            body_rates:
+                Current body rates [x_rate, y_rate, z_rate] along each axis in rad/s, 
+                relative to the satellite-fixed non-rotating reference frame.
+
             sun_vector:
                 3D sun position vector.
 
@@ -388,9 +397,6 @@ class VirtualSTR(VirtualSensor):
 
             moon_vector:
                 3D moon position vector.
-
-            cur_body_rate:
-                Current body rate [Hz].
 
         Returns:
             Dictionary containing {
@@ -403,9 +409,13 @@ class VirtualSTR(VirtualSensor):
             }
         """
         q_true = np.asarray(q_true, dtype=float)
+        body_rates = np.asarray(body_rates, dtype=float)
 
         if q_true.shape != (4,) or np.linalg.norm(q_true) == 0.0:
             raise ValueError("q_true must be a quaternion with nonzero norm.")
+        
+        if body_rates.shape != (3,):
+            raise ValueError("body_rates must have shape (3,).")
 
         sun_vector = np.asarray(sun_vector, dtype=float)
         earth_vector = np.asarray(earth_vector, dtype=float)
@@ -441,7 +451,7 @@ class VirtualSTR(VirtualSensor):
 
         fixed_frame_boresight_vector = quat.transform_vect_coord_system(boresight_vector, quat.quat_conjugate(q_true))
 
-        if self.eval_rate_exceeded(cur_body_rate):
+        if self.eval_rate_exceeded(body_rates):
             return_dict["rate_exceeded"] = True
             return_dict["q_meas"] = false_reading
         if self.eval_body_in_zone(fixed_frame_boresight_vector, sun_vector, 695700000.0, "exclusion"): # radius values should be moved eventually to constants file
