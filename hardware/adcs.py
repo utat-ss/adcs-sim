@@ -90,7 +90,7 @@ class ADCS:
         return is_valid, error
     
     @staticmethod
-    def eval_eclipse_heuristic(sun_vector: np.ndarray, earth_vector: np.ndarray, earth_radius: float = 6378137.0) -> bool:
+    def eval_eclipse_heuristic(sun_vector: np.ndarray, earth_vector: np.ndarray, earth_radius: float = const.EARTH_RADIUS_EQ_m) -> bool:
         """
         Determine whether the sun is being eclipsed by the Earth using a computationally light
         heuristic. Only usable when the satellite is relatively close to the Earth's surface.
