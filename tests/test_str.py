@@ -39,7 +39,7 @@ def get_cone_edge_angles(str: VirtualSTR, q: np.ndarray, body_start: np.ndarray,
     body_inc = (body_end - body_start) / step_num
 
     num_of_inc = 0
-    body_rates = np.array([1.0,0,0])
+    body_rates = np.array([0,0,0])
     prev_in_bore = False
     prev_angle = "start_vector_body_in_FOV" # The presence of this flag in end_angles indicates that the body's first position is already within the FOV cone considered 
     end_angles = []
@@ -190,7 +190,7 @@ def test_noise_consistency():
     sun_vect = np.array([RAD_SUN*10, RAD_SUN*10, RAD_SUN*10])
     earth_vect = np.array([RAD_EARTH*(-10), RAD_EARTH*10, RAD_EARTH*10])
     moon_vect = np.array([RAD_MOON*10, RAD_MOON*10, RAD_MOON*(-10)])
-    body_rates = np.array([1.0,0,0])
+    body_rates = np.array([0,0,0])
 
     along_bore_std = math.sqrt(str.cov_rad2[0][0])
 
