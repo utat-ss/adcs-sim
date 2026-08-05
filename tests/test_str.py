@@ -7,12 +7,13 @@ from pathlib import Path
 
 from ..utils import geometric_calculations as gc
 from ..utils import quaternion_math as quat
+from .. import constants as const
 
 STR_CFG = Path("../hardware/sensors/icd/str/sagitta.json")
 
-RAD_SUN = 695700000.0
-RAD_EARTH = 6378137.0
-RAD_MOON = 1737400.0
+RAD_SUN = const.SUN_RADIUS_m
+RAD_EARTH = const.EARTH_RADIUS_EQ_m
+RAD_MOON = const.MOON_RADIUS_m
 
 def test_loads_config():
     """
@@ -24,7 +25,8 @@ def test_loads_config():
     assert str.model == "Sagitta"
     assert str.fov_rad == pytest.approx(0.4433136300)
     assert str.exclusion_rad == pytest.approx(1.3962634016)
-    assert str.rate_hz == pytest.approx(10.0)
+    assert str.max_update_rate_hz == pytest.approx(10.0)
+    assert str.max_body_rate_radhz == pytest.approx(0.0436332313)
     assert str.cov_rad2.shape == (3, 3)
 
 def get_cone_edge_angles(str: VirtualSTR, q: np.ndarray, body_start: np.ndarray, body_end: np.ndarray, body_name: str, step_num: int) -> list:
@@ -37,7 +39,7 @@ def get_cone_edge_angles(str: VirtualSTR, q: np.ndarray, body_start: np.ndarray,
     body_inc = (body_end - body_start) / step_num
 
     num_of_inc = 0
-    body_rate = 1.0
+    body_rates = np.array([1.0,0,0])
     prev_in_bore = False
     prev_angle = "start_vector_body_in_FOV" # The presence of this flag in end_angles indicates that the body's first position is already within the FOV cone considered 
     end_angles = []
@@ -67,7 +69,7 @@ def get_cone_edge_angles(str: VirtualSTR, q: np.ndarray, body_start: np.ndarray,
         else:
             raise ValueError("body_name must be one of 'sun', 'earth', or 'moon'.")
 
-        res = str.measure(q, sun_vec, earth_vec, moon_vec, body_rate)
+        res = str.measure(q, body_rates, sun_vec, earth_vec, moon_vec)
         body_angle = gc.angle_between_vectors(fixed_frame_boresight_vector, body_vec)
 
         if res[dict_ref] == True and prev_in_bore == False:
@@ -163,17 +165,20 @@ def test_STR_rate_exceeded():
     sun_vec = np.array([0, 0, RAD_SUN * 10])
     earth_vec = np.array([0, 0, RAD_EARTH * 10])
     moon_vec = np.array([0, 0, RAD_MOON * 10])
-    body_rate = 0.0
+    body_rates = np.array([-0.1, 0.03085335373721, 0])
     
-    while body_rate < 100.0:
-        res = str.measure(q, sun_vec, earth_vec, moon_vec, body_rate)
-        if body_rate > 10.0:
+    while body_rates[0] < 0.1:
+        res = str.measure(q, body_rates, sun_vec, earth_vec, moon_vec)
+        if body_rates[0] > 0.03085335373721:
             assert res["rate_exceeded"] == True
             assert np.array_equal(res["q_meas"], np.array([0,0,0,1]))
-        else:
+        elif body_rates[0] > -0.03085335373721:
             assert res["rate_exceeded"] == False
+        else:
+            assert res["rate_exceeded"] == True
+            assert np.array_equal(res["q_meas"], np.array([0,0,0,1]))
 
-        body_rate += 0.1
+        body_rates[0] += 0.0001
 
 def test_noise_consistency():
     """
@@ -185,7 +190,7 @@ def test_noise_consistency():
     sun_vect = np.array([RAD_SUN*10, RAD_SUN*10, RAD_SUN*10])
     earth_vect = np.array([RAD_EARTH*(-10), RAD_EARTH*10, RAD_EARTH*10])
     moon_vect = np.array([RAD_MOON*10, RAD_MOON*10, RAD_MOON*(-10)])
-    rate = 1.0
+    body_rates = np.array([1.0,0,0])
 
     along_bore_std = math.sqrt(str.cov_rad2[0][0])
 
@@ -209,7 +214,7 @@ def test_noise_consistency():
                         q_test[3] += inc
                         continue
                     
-                    dict = str.measure(q_test, sun_vect, earth_vect, moon_vect, rate)
+                    dict = str.measure(q_test, body_rates, sun_vect, earth_vect, moon_vect)
                     
                     if (not dict["rate_exceeded"]) and (not dict["sun_in_exclusion"]) and (not dict["earth_in_fov"]) and (not dict["moon_in_fov"]):
                         q_meas = dict["q_meas"]
