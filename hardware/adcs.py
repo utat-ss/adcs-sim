@@ -10,6 +10,7 @@ VirtualSensor)
 from actuators.actuators import (VirtualRWL, VirtualCMG, VirtualActuator)
 
 from ..utils import geometric_calculations as gc
+from .. import constants as const
 
 SENSOR_ICD_DIR = Path("./sensors/icd")
 
@@ -171,7 +172,7 @@ class ADCS:
         sun_vect_planar = np.array([1,0]) * np.linalg.norm(sun_vector)
         
         # Determines the two 2D vectors tangent to the circle representing the sun within the defined planar coordinate system:
-        sun_tangent_vects_planar = gc.determine_circle_tangent_vectors(sun_vect_planar, 695700000.0) # Replace with reference to constant later
+        sun_tangent_vects_planar = gc.determine_circle_tangent_vectors(sun_vect_planar, const.SUN_RADIUS_m)
 
         # Calculate angles between the pairs of tangent vectors
         angle_between_body_tangents = gc.angle_between_vectors(body_tangent_vects_planar[0], body_tangent_vects_planar[1])
