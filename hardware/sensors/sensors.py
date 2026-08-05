@@ -8,6 +8,7 @@ from abc import ABC, abstractmethod
 import math
 from ...utils import geometric_calculations as gc
 from ...utils import quaternion_math as quat
+from ... import constants as const
 
 class VirtualSensor(ABC):
     def __init__(self, cfg_file: Path):
@@ -454,13 +455,13 @@ class VirtualSTR(VirtualSensor):
         if self.eval_rate_exceeded(body_rates):
             return_dict["rate_exceeded"] = True
             return_dict["q_meas"] = false_reading
-        if self.eval_body_in_zone(fixed_frame_boresight_vector, sun_vector, 695700000.0, "exclusion"): # radius values should be moved eventually to constants file
+        if self.eval_body_in_zone(fixed_frame_boresight_vector, sun_vector, const.SUN_RADIUS_m, "exclusion"):
             return_dict["sun_in_exclusion"] = True
             return_dict["q_meas"] = false_reading
-        if self.eval_body_in_zone(fixed_frame_boresight_vector, earth_vector, 6378137.0, "regular"): # earth equatorial radius (class may give false positive near poles)
+        if self.eval_body_in_zone(fixed_frame_boresight_vector, earth_vector, const.EARTH_RADIUS_EQ_m, "regular"): # earth equatorial radius (class may give false positive near poles)
             return_dict["earth_in_fov"] = True
             return_dict["q_meas"] = false_reading
-        if self.eval_body_in_zone(fixed_frame_boresight_vector, moon_vector, 1737400.0, "regular"):
+        if self.eval_body_in_zone(fixed_frame_boresight_vector, moon_vector, const.MOON_RADIUS_m, "regular"):
             return_dict["moon_in_fov"] = True
             return_dict["q_meas"] = false_reading
 
@@ -559,7 +560,7 @@ class VirtualGNSS(VirtualSensor):
         self.LLA_cov_matrix_meters = np.asarray(cfg["LLA_cov_matrix_meters"], dtype=float)
 
     @staticmethod
-    def from_geodetic_LLA(input_coords: tuple, semi_major: float = 6378137.0, semi_minor: float = 6356752.314245):
+    def from_geodetic_LLA(input_coords: tuple, semi_major: float = const.EARTH_RADIUS_EQ_m, semi_minor: float = const.EARTH_RADIUS_POLAR_m):
         """
         Convert input coordinates from geodetic LLA (geodetic latitude, longitude, altitude) to geocentric LLA
         with distance from Earth's center as the third coordinate (geocentric latitude, longitude, distance to Earth center).
@@ -574,7 +575,7 @@ class VirtualGNSS(VirtualSensor):
         return (geocentric_lat, input_coords[1], dist_from_center)
     
     @staticmethod
-    def to_geodetic_LLA(input_coords: tuple, semi_major: float = 6378137.0, semi_minor: float = 6356752.314245):
+    def to_geodetic_LLA(input_coords: tuple, semi_major: float = const.EARTH_RADIUS_EQ_m, semi_minor: float = const.EARTH_RADIUS_POLAR_m):
         """
         Convert input coordinates to geodetic LLA (geodetic latitude, longitude, altitude) from geocentric LLA
         with distance from Earth's center as the third coordinate (geocentric latitude, longitude, distance to Earth center).
