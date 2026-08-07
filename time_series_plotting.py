@@ -1,3 +1,5 @@
+import math
+
 import matplotlib.pyplot as plt
 
 # get the time series data passed as arguments
@@ -17,23 +19,34 @@ The physics aren't important to the plotting so just some random sine waves or s
 # y-axis: always a float
 
 
-def plot_time_series(t, y, ylabel, title: str):
+def plot_time_series(t, y_list, ylabels, title: str, xlabel: str = "Time [s]", separate_plots: bool = False) -> None:
     """
     Plot a time series of data.
     
     Parameters:
     t (list): A list of time values.
-    y (list): A list of corresponding data values.
-    ylabel (str): The label for the y-axis.
+    y_list (list of lists): A list of lists of corresponding data values.
+    ylabels (list): The labels for the y-axis.
     title (str): The title of the plot.
+    xlabel (str): The label for the x-axis.
+    separate_plots (bool): If True, create separate plots for each data series. By default, False (create a single plot with all series).
     """
 
-    plt.figure(figsize=(10, 5))
-    plt.plot(t, y)
-    plt.xlabel('Time (s)')
-    plt.ylabel(ylabel)
+    series_count = len(y_list)
+    if series_count != len(ylabels):
+        raise ValueError("The number of y data series must match the number of y labels.")
+    
+
+    # create a single plot with all series
+    plt.figure()
+    for index in range(series_count):
+        plt.plot(t, y_list[index], label=ylabels[index])
+    
+    plt.xlabel(xlabel)
+    plt.ylabel("Value")
     plt.title(title)
-    plt.grid(True)
+    plt.legend()
+    plt.grid()
     plt.show()
 
 
@@ -43,6 +56,8 @@ if __name__ == "__main__":
 
     # Generate some example time series data
     t = np.linspace(0, 10, 100)  # Time from 0 to 10 seconds
-    y = np.sin(t)  # Example data: sine wave
+    y1 = np.sin(t)  # Example data: sine wave
+    y2 = np.cos(t)  # Example data: cosine wave
+    y3 = np.sin(2 * t)  # Example data: sine wave with double frequency
 
-    plot_time_series(t, y, ylabel='Amplitude', title='Example Time Series Plot')
+    plot_time_series(t, [y1, y2, y3], ylabels=['Amplitude', 'Phase', 'Frequency'], title='Example Time Series Plot', separate_plots=False)
