@@ -83,6 +83,22 @@ def get_cone_edge_angles(str: VirtualSTR, q: np.ndarray, body_start: np.ndarray,
 
     return end_angles
 
+def get_combinations(combo_digits: list, combo_len: int) -> list:
+    """
+    Return a list containing all combinations of combo_digits with length combo_len.
+    Includes combinations where digits in combo_digits are repeated.
+    """
+    L = []
+    if combo_len == 1:
+        for digit in combo_digits:
+            L.append([digit])
+    else:
+        base_combos = get_combinations(combo_digits, combo_len-1)
+        for combo in base_combos:
+            for digit in combo_digits:
+                L.append(combo + [digit])
+    return L
+
 def test_sun_in_exclusion():
     """
     Verify whether the "sun_in_exclusion" parameter of STR measurements evaluates to True 
@@ -96,7 +112,7 @@ def test_sun_in_exclusion():
     end_angles = get_cone_edge_angles(str, q, sun_vec_start, sun_vec_end, "sun", 10000)
 
     assert len(end_angles) == 2
-    assert end_angles[0] == pytest.approx(0.980323067373, abs=0.001)
+    assert end_angles[0] == pytest.approx(0.980323067373, abs=0.001) # These values were indepentently verified via separate calculations
     assert end_angles[1] == pytest.approx(0.980323067373, abs=0.001)
 
     sun_vec_start = np.array([RAD_SUN * -10, RAD_SUN * 10, RAD_SUN * 100])
@@ -180,10 +196,35 @@ def test_STR_rate_exceeded():
 
         body_rates[0] += 0.0001
 
+def test_edge_cases():
+    """
+    Verify that the STR class returns unit quaternions for a wide variety of input true quaternion values.
+    """
+    str = VirtualSTR(STR_CFG)
+
+    sun_vect = np.array([RAD_SUN*10, RAD_SUN*10, RAD_SUN*10])
+    earth_vect = np.array([RAD_EARTH*(-10), RAD_EARTH*10, RAD_EARTH*10])
+    moon_vect = np.array([RAD_MOON*10, RAD_MOON*10, RAD_MOON*(-10)])
+    body_rates = np.array([0,0,0])
+
+    test_values = [-1, -(10**(-10)), 0, 0.5, 1, 10**10]
+    testing_quats = get_combinations(test_values, 4)
+
+    for q in testing_quats:
+        q = np.asarray(q)
+        if np.linalg.norm(q) == 0.0:
+            continue
+
+        # Testing non-unit quaternion inputs, as they should be automatically normalized by str.measure():
+        dict = str.measure(q, body_rates, sun_vect, earth_vect, moon_vect) 
+
+        q_meas = dict["q_meas"]
+        assert len(q_meas) == 4
+        assert np.linalg.norm(q_meas) == pytest.approx(1.0)
+
 def test_noise_consistency():
     """
-    Verify that the STR class returns quaternions with statistically consistent noise. 
-    Test may take up to a minute to run.
+    Verify that the STR class returns quaternions with statistically consistent noise.
     """
     str = VirtualSTR(STR_CFG)
 
@@ -198,48 +239,37 @@ def test_noise_consistency():
     within_1_std = 0
     within_2_std = 0
     within_3_std = 0
-    bound = 10
-    inc = 1
 
-    q_test = np.array([-bound,0,0,0], dtype=float)
+    q_test = np.array([1,1,1,1])
+    q_test = quat.normalize_quat(q_test)
 
-    while q_test[0] <= bound:
-        q_test[1] = -bound
-        while q_test[1] <= bound:
-            q_test[2] = -bound
-            while q_test[2] <= bound:
-                q_test[3] = -bound
-                while q_test[3] <= bound:
-                    if np.linalg.norm(q_test) == 0.0:
-                        q_test[3] += inc
-                        continue
-                    
-                    dict = str.measure(q_test, body_rates, sun_vect, earth_vect, moon_vect)
-                    
-                    if (not dict["rate_exceeded"]) and (not dict["sun_in_exclusion"]) and (not dict["earth_in_fov"]) and (not dict["moon_in_fov"]):
-                        q_meas = dict["q_meas"]
-                    else:
-                        q_test[3] += inc
-                        continue
+    for i in range(10000):             
+        dict = str.measure(q_test, body_rates, sun_vect, earth_vect, moon_vect)
+        
+        invalid_measurement = (
+            dict["rate_exceeded"]
+            or dict["sun_in_exclusion"]
+            or dict["earth_in_fov"]
+            or dict["moon_in_fov"]
+        )
+        
+        if not invalid_measurement:
+            q_meas = dict["q_meas"]
+            cases += 1
+        else:
+            continue
 
-                    q_error = quat.quat_multiply(quat.quat_conjugate(q_test), q_meas)
+        q_error = quat.quat_multiply(quat.quat_conjugate(q_test), q_meas)
 
-                    rot_vec_error = quat.rotvec_from_quat(q_error)
+        rot_vec_error = quat.rotvec_from_quat(q_error)
 
-                    if abs(rot_vec_error[0]) < along_bore_std:
-                        within_1_std += 1
-                    if abs(rot_vec_error[0]) < along_bore_std * 2:
-                        within_2_std += 1
-                    if abs(rot_vec_error[0]) < along_bore_std * 3:
-                        within_3_std += 1
+        if abs(rot_vec_error[0]) < along_bore_std:
+            within_1_std += 1
+        if abs(rot_vec_error[0]) < along_bore_std * 2:
+            within_2_std += 1
+        if abs(rot_vec_error[0]) < along_bore_std * 3:
+            within_3_std += 1
 
-                    cases += 1
-
-                    q_test[3] += inc
-                q_test[2] += inc
-            q_test[1] += inc
-        q_test[0] += inc
-    
     # The following assertions should only raise errors very infrequently:
     assert within_1_std / cases == pytest.approx(0.68, abs=0.02)
     assert within_2_std / cases == pytest.approx(0.95, abs=0.01)
