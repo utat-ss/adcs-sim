@@ -35,3 +35,14 @@ def plot_time_series(t, y, ylabel, title: str):
     plt.title(title)
     plt.grid(True)
     plt.show()
+
+
+if __name__ == "__main__":
+    # Example usage
+    import numpy as np
+
+    # Generate some example time series data
+    t = np.linspace(0, 10, 100)  # Time from 0 to 10 seconds
+    y = np.sin(t)  # Example data: sine wave
+
+    plot_time_series(t, y, ylabel='Amplitude', title='Example Time Series Plot')
