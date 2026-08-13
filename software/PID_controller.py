@@ -102,7 +102,9 @@ class PID:
         """
         Return the PID controller's produced output given system state state_vec, 
         which describes the system after self.def_timestep has elapsed, 
-        or at time step_timestamp if a value is provided. If the step's timestamp
+        or at time step_timestamp if a value is provided. If the current step's timestamp
+        is the same as the prior step's timestamp, the controller will redo the prior 
+        step operation using the newly provided state_vec.
         """
         state_vec = np.asarray(state_vec, dtype=float)
 
