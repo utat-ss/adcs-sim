@@ -4,6 +4,32 @@ from pydantic import BaseModel, field_validator, model_validator, ValidationInfo
 import numpy as np
 from constants import G, M, mu, e
 from collections.abc import Callable
+from datetime import datetime, timezone
+from scipy.integrate import solve_ivp
+from environment import j2_acceleration_m_s2, aerodynamic_drag_perturbation_m_s2
+
+
+class simulation_config():
+    """
+    Configuration for the simulation.
+    """
+    t0: datetime # Simulation start time (UTC)
+    tf: datetime # Simulation end time (UTC)
+    time_steps: int = 1000         # Number of time steps
+    propagator_method: str = "cowell"  # Propagator to use: "cowell", "encke", or "sgp4"
+    x0: np.ndarray = np.array([0., 0., 0., 0., 0., 0.]) # Initial state vector (6x1) (must be in ECI (for now))
+    drag: bool = False # Whether to include drag in the simulation
+    J2: bool = False # Whether to include J2 perturbation in the simulation
+    
+    def __init__(self, t0: datetime, tf: datetime, time_steps: int = 1000, propagator_method: str = "cowell", x0: np.ndarray = np.array([0., 0., 0., 0., 0., 0.]), drag: bool = False, J2: bool = False):
+        self.t0 = t0
+        self.tf = tf
+        self.time_steps = time_steps
+        self.propagator_method = propagator_method
+        self.x0 = x0
+        self.drag = drag
+        self.J2 = J2
+    
 
 class KeplerianElements(BaseModel):
     """
@@ -537,13 +563,14 @@ def mee_motion(me: ModifiedEquinoctialElements, L_rad: float, p_rsw_m2_s2: np.nd
     return medot
 
 
-def cowell_motion(x: np.ndarray, p_m_s2: np.ndarray) -> np.ndarray:
+def cowell_motion(x: np.ndarray, add_drag: bool, add_J2: bool) -> np.ndarray:
     """
     Calculate the orbital motion of a Cartesian state using Cowell's method.
 
     Arguments:
     x:      (np.ndarray) (6,) Orbital state vector. (x, y, z, v_x, v_y, v_z)
-    p_m_s2 (np.ndarray) (3,) Perturbing accelerations.
+    add_drag:   (bool) Whether to include atmospheric drag.
+    add_J2:     (bool) Whether to include J2 perturbation.
 
     Returns:
     xdot:   (np.ndarray) (6,) Orbit motion.
@@ -552,13 +579,21 @@ def cowell_motion(x: np.ndarray, p_m_s2: np.ndarray) -> np.ndarray:
 
     r_vec = x[0:3] # is shape (3,)
     r_mag = np.linalg.norm(r_vec) # magnitude of r vector
+    
+    p_m_s2 = np.array([0., 0., 0.]) # initialize perturbing acceleration vector
+    if add_J2:
+        r_vec_m = r_vec/1000
+        p_m_s2 += j2_acceleration_m_s2(r_vec_m)
+    if add_drag:
+        dr_m = dr/1000
+        p_m_s2 += aerodynamic_drag_perturbation_m_s2(velocity_m_s=dr_m, velocity_atm_m_s=np.array([0., 0., 0.]), air_kg_m3=1e-12, drag_coeff=2.2, area_m_2=0.03, mass_kg=1.0)#  may wanna include the parameters used to include drag in our satellite configuration file
 
     dv = ( -mu*r_vec/(r_mag)**3 ) + p_m_s2
     
     xdot = np.concatenate((dr, dv))  # is shape (6,)
     return xdot
 
-def encke_motion(t: float, r: np.ndarray, x: np.ndarray, p_m_s2: np.ndarraywai):
+def encke_motion(t: float, r: np.ndarray, x: np.ndarray, add_drag: bool, add_J2: bool) -> np.ndarray:
     """
     Calculate the orbital motion of a Cartesian state using Encke's method.
 
@@ -573,7 +608,7 @@ def encke_motion(t: float, r: np.ndarray, x: np.ndarray, p_m_s2: np.ndarraywai):
     r_vec = r[0:3]
     r_mag = np.linalg.norm(r_vec) # magnitude of r vector
 
-    kep = cartesian2keplerian(r, mu) # for now assume we are only doing encke motion for orbit around sun
+    kep = cartesian2keplerian(r, mu) # for now assume we are only doing encke motion for orbit around sun (but mu was calculated with earth's mass??????????)
     r_osc_mag = kepler_motion(kep, t) # magnitude of r_osc vector, distance from central body to spacecraft
 
     delta_r_dot = x[3:6] # (3,)
@@ -587,11 +622,46 @@ def encke_motion(t: float, r: np.ndarray, x: np.ndarray, p_m_s2: np.ndarraywai):
     e = 1 - d**(3/2) # (1,)
     f = e*r_vec # (3, )
     
+    p_m_s2 = np.array([0., 0., 0.]) # initialize perturbing acceleration vector
+    if add_J2:
+        p_m_s2 += j2_acceleration_m_s2(r_vec)
+    if add_drag:
+        p_m_s2 += aerodynamic_drag_perturbation_m_s2(velocity_m_s=r[3:6], velocity_atm_m_s=np.array([0., 0., 0.]), air_kg_m3=1e-12, drag_coeff=2.2, area_m_2=0.03, mass_kg=1.0) #  may wanna include the parameters used to include drag in our satellite configuration file
+    
     delta_r_dot_dot = a*(delta_r - f) + p_m_s2
 
     xdot = np.concatenate((delta_r_dot, delta_r_dot_dot)) # (6,)
 
     return xdot
+
+
+def propagate_orbit(config: simulation_config):
+    """
+    Propagate an orbit from an initial state using the parameters given in config.
+
+    Arguments:
+    config:     (simulation_config) Configuration for the simulation.
+
+    Returns:
+    x:         (np.ndarray) (time_steps, 6) Array of orbital states at each time step.
+    """
+    if config.propagator_method == "cowell":
+        results = solve_ivp(fun=lambda t, x: cowell_motion(x, add_drag=config.drag, add_J2=config.J2), 
+                         t_span=(config.t0.timestamp(), config.tf.timestamp()),
+                         y0=config.x0,
+                         t_eval=np.linspace(config.t0.timestamp(), config.tf.timestamp(), config.time_steps),
+                         rtol=1e-10, atol=1e-10, method='RK45')
+        return results.y
+    elif config.propagator_method == "encke":
+        results = solve_ivp(fun=lambda t, x: encke_motion(t, r=kepler_motion(cartesian2keplerian(config.x0[0:3], mu), t)+x[0:3], x=x, add_drag=config.drag, add_J2=config.J2), #may wanna refactor later so we're not calling kepler_motion every time step
+                         t_span=(config.t0.timestamp(), config.tf.timestamp()),
+                         y0=config.x0, # initial deviation is zero
+                         t_eval=np.linspace(config.t0.timestamp(), config.tf.timestamp(), config.time_steps),
+                         rtol=1e-10, atol=1e-10, method='RK45')
+        delta_r = results.y
+        r_ref = [kepler_motion(cartesian2keplerian(config.x0[0:3], mu), t) for t in np.linspace(config.t0.timestamp(), config.tf.timestamp(), config.time_steps)]
+        return delta_r+r_ref
+        
 
 def propagate_sgp4(tle: str, t: float):
     """
