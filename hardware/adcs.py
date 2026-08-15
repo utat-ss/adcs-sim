@@ -145,7 +145,7 @@ class ADCS:
 
         Returns: Float value ranging from 0.0 (full eclipse) to 1.0 (sun fully visible) representing the 
         approximate fraction of sun visible to a satellite positioned at the origin. This fraction 
-        is calculated by determining the linear distance across the sun (relative to the plane 
+        is calculated by determining the angular distance across the sun (relative to the plane 
         defined by the origin, the sun, and the given body) covered by the body in question.
         """
 
@@ -163,35 +163,43 @@ class ADCS:
                 plane_normal = np.cross(sun_vector, np.array([1,0,0]))
                 
         # Returns 2D coordinates of the body vector projected onto a plane defined by the sun_vector and itself:
-        body_vect_planar = gc.to_planar_vector(sun_vector, body_vector)
+        body_pos_vect_planar = gc.to_planar_vector(sun_vector, body_vector)
 
         # Determines the two 2D vectors tangent to the circle representing the body considered within the defined planar coordinate system:
-        body_tangent_vects_planar = gc.determine_circle_tangent_vectors(body_vect_planar, body_radius)
+        body_tangent_vects_planar = gc.determine_circle_tangent_vectors(body_pos_vect_planar, body_radius)
 
-        # Provides 2D coordinates of the sun in the used planar coordinate system
-        sun_vect_planar = np.array([1,0]) * np.linalg.norm(sun_vector)
+        # Provides 2D coordinates of the sun in the used planar coordinate system:
+        sun_pos_vect_planar = np.array([1,0]) * np.linalg.norm(sun_vector)
         
         # Determines the two 2D vectors tangent to the circle representing the sun within the defined planar coordinate system:
-        sun_tangent_vects_planar = gc.determine_circle_tangent_vectors(sun_vect_planar, const.SUN_RADIUS_m)
+        sun_tangent_vects_planar = gc.determine_circle_tangent_vectors(sun_pos_vect_planar, const.SUN_RADIUS_m)
 
-        # Calculate angles between the pairs of tangent vectors
-        angle_between_body_tangents = gc.angle_between_vectors(body_tangent_vects_planar[0], body_tangent_vects_planar[1])
-        angle_between_sun_tangents = gc.angle_between_vectors(sun_tangent_vects_planar[0], sun_tangent_vects_planar[1])
+        # Calculate angles between the pairs of tangent vectors:
+        angle_between_body_tangents = gc.angle_between_vectors(*body_tangent_vects_planar)
+        angle_between_sun_tangents = gc.angle_between_vectors(*sun_tangent_vects_planar)
 
-        # Determine fraction of sun visible
-        if gc.eval_vector_between_vectors(sun_vect_planar, body_tangent_vects_planar[0], body_tangent_vects_planar[1]):
-            if gc.eval_vector_between_vectors(sun_tangent_vects_planar[0], body_tangent_vects_planar[0], body_tangent_vects_planar[1]) and gc.eval_vector_between_vectors(sun_tangent_vects_planar[1], body_tangent_vects_planar[0], body_tangent_vects_planar[1]):
+        # Casework to determine fraction of sun visible:
+        if gc.eval_vector_between_vectors(sun_pos_vect_planar, *body_tangent_vects_planar):
+            # Sun fully blocked by body:
+            if gc.eval_vector_between_vectors(sun_tangent_vects_planar[0], *body_tangent_vects_planar) and gc.eval_vector_between_vectors(sun_tangent_vects_planar[1], *body_tangent_vects_planar):
                 return 0.0
-            if (not gc.eval_vector_between_vectors(sun_tangent_vects_planar[0], body_tangent_vects_planar[0], body_tangent_vects_planar[1])) and (not gc.eval_vector_between_vectors(sun_tangent_vects_planar[1], body_tangent_vects_planar[0], body_tangent_vects_planar[1])):
+            # Body eclipsing sun in annular fashion (intersecting sun position vector):
+            if (not gc.eval_vector_between_vectors(sun_tangent_vects_planar[0], *body_tangent_vects_planar)) and (not gc.eval_vector_between_vectors(sun_tangent_vects_planar[1], *body_tangent_vects_planar)):
                 return (angle_between_sun_tangents - angle_between_body_tangents) / angle_between_sun_tangents
-            min_angle = min(gc.angle_between_vectors(sun_vect_planar, body_tangent_vects_planar[0]), gc.angle_between_vectors(sun_vect_planar, body_tangent_vects_planar[1]))
+            # Body covering over half of sun disk:
+            min_angle = min(gc.angle_between_vectors(sun_pos_vect_planar, body_tangent_vects_planar[0]), gc.angle_between_vectors(sun_pos_vect_planar, body_tangent_vects_planar[1]))
             return (angle_between_sun_tangents / 2 - min_angle) / angle_between_sun_tangents
-        
-        if gc.eval_vector_between_vectors(sun_tangent_vects_planar[0], body_tangent_vects_planar[0], body_tangent_vects_planar[1]) or gc.eval_vector_between_vectors(sun_tangent_vects_planar[1], body_tangent_vects_planar[0], body_tangent_vects_planar[1]):
-            if (not gc.eval_vector_between_vectors(sun_tangent_vects_planar[0], body_tangent_vects_planar[0], body_tangent_vects_planar[1])) and (not gc.eval_vector_between_vectors(sun_tangent_vects_planar[1], body_tangent_vects_planar[0], body_tangent_vects_planar[1])):
-                return (angle_between_sun_tangents - angle_between_body_tangents) / angle_between_sun_tangents
-            min_angle = min(gc.angle_between_vectors(sun_vect_planar, body_tangent_vects_planar[0]), gc.angle_between_vectors(sun_vect_planar, body_tangent_vects_planar[1]))
+
+        if gc.eval_vector_between_vectors(sun_tangent_vects_planar[0], *body_tangent_vects_planar) or gc.eval_vector_between_vectors(sun_tangent_vects_planar[1], *body_tangent_vects_planar):
+            # Body covering less than half of sun disk:
+            min_angle = min(gc.angle_between_vectors(sun_pos_vect_planar, body_tangent_vects_planar[0]), gc.angle_between_vectors(sun_pos_vect_planar, body_tangent_vects_planar[1]))
             return (angle_between_sun_tangents / 2 + min_angle) / angle_between_sun_tangents
+
+        if gc.eval_vector_between_vectors(body_pos_vect_planar, *sun_tangent_vects_planar):
+            # Body eclipsing sun in annular fashion (not intersecting sun position vector):
+            return (angle_between_sun_tangents - angle_between_body_tangents) / angle_between_sun_tangents
+
+        # Sun fully visible:
         return 1.0
 
     def add_sensor(self, id: str, model: str, dcm: np.ndarray):
