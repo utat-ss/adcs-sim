@@ -73,7 +73,7 @@ def build_earth_mesh(radius=6371, rows=60, cols=60, gmst_rad=0.0):
     return vertices, faces, texcoords
 
 #Create earth sphere and wireframe
-def create_earth(view, texture_path='earth_texture.jpg', gmst_rad=0.0):
+def create_earth(view, texture_path='assets/earth.jpg', gmst_rad=0.0):
     """Create Earth sphere in scene, textured with an accurate surface map
     oriented in the ECI frame at the given GMST.
     """
@@ -155,7 +155,7 @@ def plot_keplerian_orbit(kep: KeplerianElements):
     view = canvas.central_widget.add_view()
 
     create_camera(view)
-    earth = create_earth(view, texture_path='earth_texture.jpg', gmst_rad=gmst_rad)
+    earth = create_earth(view, texture_path='assets/earth.jpg', gmst_rad=gmst_rad)
 
     # Orbit
     scene.visuals.Line(
@@ -175,16 +175,3 @@ def plot_keplerian_orbit(kep: KeplerianElements):
     create_axis_legend(canvas)
 
     canvas.app.run()
-
-# TEST RUN
-
-if __name__ == "__main__":
-    kep = KeplerianElements(
-        a_km=6771,
-        e=0.001,
-        i_rad=np.radians(51.6),
-        Om_rad=0.0,
-        om_rad=0.0
-    )
-
-    plot_keplerian_orbit(kep)
