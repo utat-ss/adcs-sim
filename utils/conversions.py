@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from typing import Literal, Tuple
 
 import numpy as np
+import math
 import astropy.units as u
 from astropy.time import Time
 from astropy.coordinates import (
