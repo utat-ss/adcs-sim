@@ -613,7 +613,7 @@ def cowell_motion(t: float, x: np.ndarray, spacecraft, perturbations) -> np.ndar
 
     p_m_s2 = combine_perturbations(perturbations, t, x, spacecraft)
 
-    dv = ( -mu*r_vec/(r_mag)**3 ) + p_m_s2
+    dv = (-mu*r_vec/(r_mag)**3)+p_m_s2
     
     xdot = np.concatenate((dr, dv))  # is shape (6,)
     return xdot
