@@ -4,7 +4,7 @@ from pydantic import BaseModel, field_validator, model_validator, ValidationInfo
 import numpy as np
 from constants import G, M, mu, e
 from collections.abc import Callable
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from scipy.integrate import solve_ivp
 from environment import j2_acceleration_m_s2, aerodynamic_drag_perturbation_m_s2
 
@@ -568,7 +568,7 @@ def cowell_motion(x: np.ndarray, add_drag: bool, add_J2: bool) -> np.ndarray:
     Calculate the orbital motion of a Cartesian state using Cowell's method.
 
     Arguments:
-    x:      (np.ndarray) (6,) Orbital state vector. (x, y, z, v_x, v_y, v_z)
+    x:      (np.ndarray) (6,) Orbital state vector. (x, y, z, v_x, v_y, v_z) in meters
     add_drag:   (bool) Whether to include atmospheric drag.
     add_J2:     (bool) Whether to include J2 perturbation.
 
@@ -579,16 +579,13 @@ def cowell_motion(x: np.ndarray, add_drag: bool, add_J2: bool) -> np.ndarray:
 
     r_vec = x[0:3] # is shape (3,)
     r_mag = np.linalg.norm(r_vec) # magnitude of r vector
-    
     p_m_s2 = np.array([0., 0., 0.]) # initialize perturbing acceleration vector
     if add_J2:
-        r_vec_m = r_vec/1000
-        p_m_s2 += j2_acceleration_m_s2(r_vec_m)
+        p_m_s2 += j2_acceleration_m_s2(r_vec)
     if add_drag:
-        dr_m = dr/1000
-        p_m_s2 += aerodynamic_drag_perturbation_m_s2(velocity_m_s=dr_m, velocity_atm_m_s=np.array([0., 0., 0.]), air_kg_m3=1e-12, drag_coeff=2.2, area_m_2=0.03, mass_kg=1.0)#  may wanna include the parameters used to include drag in our satellite configuration file
+        p_m_s2 += aerodynamic_drag_perturbation_m_s2(velocity_m_s=dr, velocity_atm_m_s=np.array([0., 0., 0.]), air_kg_m3=1e-12, drag_coeff=2.2, area_m_2=0.03, mass_kg=1.0)#  may wanna include the parameters used to include drag in our satellite configuration file
 
-    dv = ( -mu*r_vec/(r_mag)**3 ) + p_m_s2
+    dv = (-mu*r_vec/(r_mag)**3)+p_m_s2
     
     xdot = np.concatenate((dr, dv))  # is shape (6,)
     return xdot
@@ -646,11 +643,14 @@ def propagate_orbit(config: simulation_config):
     x:         (np.ndarray) (time_steps, 6) Array of orbital states at each time step.
     """
     if config.propagator_method == "cowell":
+        t_span = (0.0, (config.tf - config.t0).total_seconds())
         results = solve_ivp(fun=lambda t, x: cowell_motion(x, add_drag=config.drag, add_J2=config.J2), 
-                         t_span=(config.t0.timestamp(), config.tf.timestamp()),
+                         t_span = (0.0, (config.tf - config.t0).total_seconds()),
                          y0=config.x0,
-                         t_eval=np.linspace(config.t0.timestamp(), config.tf.timestamp(), config.time_steps),
+                         t_eval=np.linspace(t_span[0], t_span[1], config.time_steps),
                          rtol=1e-10, atol=1e-10, method='RK45')
+        # print(np.linspace(config.t0.timestamp(), config.tf.timestamp(), config.time_steps))
+        # print(results.t)
         return results.y
     elif config.propagator_method == "encke":
         results = solve_ivp(fun=lambda t, x: encke_motion(t, r=kepler_motion(cartesian2keplerian(config.x0[0:3], mu), t)+x[0:3], x=x, add_drag=config.drag, add_J2=config.J2), #may wanna refactor later so we're not calling kepler_motion every time step
@@ -678,3 +678,33 @@ def propagate_sgp4(tle: str, t: float):
     #TODO: SGP4 implementation
     x = np.array([0., 0., 0., 0., 0., 0.])
     return x
+
+if __name__ == "__main__":
+    r0 = 7000000
+    v0 = np.sqrt(mu/r0)
+    x0 = np.array([r0, 0, 0, 0, v0, 0])
+
+    t0 = datetime(2026, 8, 14, 0, 0, 0, tzinfo=timezone.utc)
+    T = 2*np.pi*np.sqrt(r0**3/mu)
+    tf = t0+timedelta(seconds=T)
+
+    config = simulation_config(
+        t0=t0,
+        tf=tf,
+        time_steps=100,
+        propagator_method="cowell",
+        x0=x0,
+        drag=False,
+        J2=False,
+    )
+
+    result = propagate_orbit(config)
+
+    print(result.shape)
+    print("Initial:")
+    print(result[:, 0])
+
+    print("Final:")
+    print(result[:, -1])
+    
+    print(result)
