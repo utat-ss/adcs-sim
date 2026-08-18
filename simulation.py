@@ -15,7 +15,6 @@ class SimConfig:
     tf:     float   # Simulation end time [JD]
     initial_state: InitialStateConfig # Contain initial state in any of the accepted formats
 
-
 # At the least it should specify the time range of the simulation 
 # (preferably something like UTC time or JD) and the initial conditions
 # (initial attitude and orbital state vector). Ideally will enable us to 
@@ -23,7 +22,6 @@ class SimConfig:
 # method. If you can think of other toggle-able options or selectors, 
 # then by all means include them
 
-.
 def load_sim_cfg(filepath: Path) -> SimConfig:
     """
     Load the simulator configuration from a file.
