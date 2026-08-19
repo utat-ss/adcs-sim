@@ -412,7 +412,7 @@ def cartesian2keplerian(x: np.ndarray, mu_km3_s2: float) -> tuple[KeplerianEleme
     Convert a cartesian state vector to Keplerian elements with true anomaly.
 
     Arguments:
-    x:                  [np.ndarray] (6x1) Orbital state vector in cartesian inertial frame.
+    x:                  [np.ndarray] (6x1) Orbital state vector in cartesian inertial frame in km.
     mu_km3_s2:          [float] Gravitational parameter of the primary body.
 
     Returns:
@@ -590,7 +590,8 @@ def cowell_motion(x: np.ndarray, add_drag: bool, add_J2: bool) -> np.ndarray:
     xdot = np.concatenate((dr, dv))  # is shape (6,)
     return xdot
 
-def encke_motion(t: float, r: np.ndarray, x: np.ndarray, add_drag: bool, add_J2: bool) -> np.ndarray:
+
+def encke_motion(t: float, x_ref: np.ndarray, delta_x: np.ndarray, add_drag: bool, add_J2: bool) -> np.ndarray:
     """
     Calculate the orbital motion of a Cartesian state using Encke's method.
 
@@ -602,34 +603,218 @@ def encke_motion(t: float, r: np.ndarray, x: np.ndarray, add_drag: bool, add_J2:
     Returns:
     xdot:   (np.ndarray) (6,)  (delta_r, delta_r_dot) (deviation's derivative).
     """
-    r_vec = r[0:3]
-    r_mag = np.linalg.norm(r_vec) # magnitude of r vector
+    r_ref = x_ref[0:3]
+    v_ref = x_ref[3:6]
+    r_mag = np.linalg.norm(r_ref) # magnitude of r vector
 
-    kep = cartesian2keplerian(r, mu) # for now assume we are only doing encke motion for orbit around sun (but mu was calculated with earth's mass??????????)
-    r_osc_mag = kepler_motion(kep, t) # magnitude of r_osc vector, distance from central body to spacecraft
+    delta_r_dot = delta_x[3:6] # (3,)
 
-    delta_r_dot = x[3:6] # (3,)
+    delta_r = delta_x[0:3] # (3,)
 
-    delta_r = x[0:3] # (3,)
-
-    a = -mu/r_osc_mag**3 # (1, )
-    b = 2*r_vec - delta_r  # (3, )
-    c = np.dot(delta_r, b) # (1, )
-    d = c / (r_mag**2) # (1, )
-    e = 1 - d**(3/2) # (1,)
-    f = e*r_vec # (3, )
+    q = np.dot(delta_r, (delta_r+2*r_ref)/np.linalg.norm(r_ref)**2)
+    fq = q*((q**2+3*q+3)/((1+q)**1.5+1))
+    a = -mu/r_mag**3*(delta_r-fq*(r_ref+delta_r))
     
     p_m_s2 = np.array([0., 0., 0.]) # initialize perturbing acceleration vector
     if add_J2:
-        p_m_s2 += j2_acceleration_m_s2(r_vec)
+        p_m_s2 += j2_acceleration_m_s2(r_ref+delta_r)
     if add_drag:
-        p_m_s2 += aerodynamic_drag_perturbation_m_s2(velocity_m_s=r[3:6], velocity_atm_m_s=np.array([0., 0., 0.]), air_kg_m3=1e-12, drag_coeff=2.2, area_m_2=0.03, mass_kg=1.0) #  may wanna include the parameters used to include drag in our satellite configuration file
+        p_m_s2 += aerodynamic_drag_perturbation_m_s2(velocity_m_s=v_ref, velocity_atm_m_s=np.array([0., 0., 0.]), air_kg_m3=1e-12, drag_coeff=2.2, area_m_2=0.03, mass_kg=1.0) #  may wanna include the parameters used to include drag in our satellite configuration file
     
-    delta_r_dot_dot = a*(delta_r - f) + p_m_s2
+    delta_r_dot_dot = a + p_m_s2
 
     xdot = np.concatenate((delta_r_dot, delta_r_dot_dot)) # (6,)
 
     return xdot
+
+def stumpff_C(z):
+    if z > 1e-8:
+        sz = np.sqrt(z)
+        return (1.0 - np.cos(sz)) / z
+
+    elif z < -1e-8:
+        sz = np.sqrt(-z)
+        return (np.cosh(sz) - 1.0) / (-z)
+
+    else:
+        return (
+            1.0 / 2.0
+            - z / 24.0
+            + z**2 / 720.0
+            - z**3 / 40320.0
+        )
+
+
+def stumpff_S(z):
+    if z > 1e-8:
+        sz = np.sqrt(z)
+        return (sz - np.sin(sz)) / sz**3
+
+    elif z < -1e-8:
+        sz = np.sqrt(-z)
+        return (np.sinh(sz) - sz) / sz**3
+
+    else:
+        return (
+            1.0 / 6.0
+            - z / 120.0
+            + z**2 / 5040.0
+            - z**3 / 362880.0
+        )
+
+
+def kepler_cartesian_motion(
+    x0_m,
+    t,
+    mu_m3_s2=mu,
+    tolerance=1e-10,
+    max_iter=100,
+):
+    """
+    Propagate a Cartesian state under unperturbed two-body motion.
+
+    Parameters
+    ----------
+    x0_m : np.ndarray, shape (6,)
+        [x, y, z, vx, vy, vz]
+        Position in m, velocity in m/s.
+
+    t : float
+        Time since initial state [s].
+
+    mu_m3_s2 : float
+        Gravitational parameter [m^3/s^2].
+
+    Returns
+    -------
+    x : np.ndarray, shape (6,)
+        Propagated Cartesian state [m, m/s].
+    """
+
+    x0_m = np.asarray(x0_m, dtype=float)
+
+    if x0_m.shape != (6,):
+        raise ValueError(
+            f"x0_m must have shape (6,), got {x0_m.shape}"
+        )
+
+    r0_vec = x0_m[:3]
+    v0_vec = x0_m[3:]
+
+    r0 = np.linalg.norm(r0_vec)
+    v0 = np.linalg.norm(v0_vec)
+
+    if r0 == 0:
+        raise ValueError("Initial position cannot be zero.")
+
+    if t == 0:
+        return x0_m.copy()
+
+    sqrt_mu = np.sqrt(mu_m3_s2)
+
+    # Initial radial velocity
+    vr0 = np.dot(r0_vec, v0_vec) / r0
+
+    # Reciprocal semi-major axis
+    alpha = (
+        2.0 / r0
+        - v0**2 / mu_m3_s2
+    )
+
+    # Initial guess for universal anomaly.
+    # This is especially appropriate for the elliptic Earth orbits
+    # being tested here.
+    if alpha > 1e-12:
+        chi = sqrt_mu * alpha * t
+    else:
+        chi = sqrt_mu * t / r0
+
+    # Solve universal Kepler equation
+    for _ in range(max_iter):
+
+        z = alpha * chi**2
+
+        C = stumpff_C(z)
+        S = stumpff_S(z)
+
+        F = (
+            (r0 * vr0 / sqrt_mu)
+            * chi**2
+            * C
+
+            + (1.0 - alpha * r0)
+            * chi**3
+            * S
+
+            + r0 * chi
+
+            - sqrt_mu * t
+        )
+
+        dF = (
+            (r0 * vr0 / sqrt_mu)
+            * chi
+            * (1.0 - z * S)
+
+            + (1.0 - alpha * r0)
+            * chi**2
+            * C
+
+            + r0
+        )
+
+        delta_chi = F / dF
+        chi -= delta_chi
+
+        if abs(delta_chi) < tolerance:
+            break
+
+    else:
+        raise RuntimeError(
+            "Universal-variable Kepler solver did not converge."
+        )
+
+    # Recalculate at converged chi
+    z = alpha * chi**2
+    C = stumpff_C(z)
+    S = stumpff_S(z)
+
+    # Lagrange f, g coefficients
+    f = 1.0 - chi**2 / r0 * C
+
+    g = (
+        t
+        - chi**3 / sqrt_mu * S
+    )
+
+    r_vec = (
+        f * r0_vec
+        + g * v0_vec
+    )
+
+    r = np.linalg.norm(r_vec)
+
+    # Lagrange f-dot, g-dot
+    f_dot = (
+        sqrt_mu
+        / (r * r0)
+        * (
+            alpha * chi**3 * S
+            - chi
+        )
+    )
+
+    g_dot = (
+        1.0
+        - chi**2 / r * C
+    )
+
+    v_vec = (
+        f_dot * r0_vec
+        + g_dot * v0_vec
+    )
+
+    return np.concatenate((r_vec, v_vec))
 
 
 def propagate_orbit(config: simulation_config):
@@ -653,14 +838,52 @@ def propagate_orbit(config: simulation_config):
         # print(results.t)
         return results.y
     elif config.propagator_method == "encke":
-        results = solve_ivp(fun=lambda t, x: encke_motion(t, r=kepler_motion(cartesian2keplerian(config.x0[0:3], mu), t)+x[0:3], x=x, add_drag=config.drag, add_J2=config.J2), #may wanna refactor later so we're not calling kepler_motion every time step
-                         t_span=(config.t0.timestamp(), config.tf.timestamp()),
-                         y0=config.x0, # initial deviation is zero
-                         t_eval=np.linspace(config.t0.timestamp(), config.tf.timestamp(), config.time_steps),
-                         rtol=1e-10, atol=1e-10, method='RK45')
-        delta_r = results.y
-        r_ref = [kepler_motion(cartesian2keplerian(config.x0[0:3], mu), t) for t in np.linspace(config.t0.timestamp(), config.tf.timestamp(), config.time_steps)]
-        return delta_r+r_ref
+        duration_s = (config.tf - config.t0).total_seconds()
+
+        t_span = (0.0, duration_s)
+
+        t_eval = np.linspace(
+            0.0,
+            duration_s,
+            config.time_steps
+        )
+
+        # Encke integrates DEVIATION from the reference orbit.
+        delta_x0 = np.zeros(6)
+
+        def rhs(t, delta_x):
+            x_ref = kepler_cartesian_motion(
+                config.x0,
+                t,
+            )
+            return encke_motion(
+                t=t,
+                x_ref=x_ref,
+                delta_x=delta_x,
+                add_drag=config.drag,
+                add_J2=config.J2,
+            )
+
+        results = solve_ivp(
+            fun=rhs,
+            t_span=t_span,
+            y0=delta_x0,
+            t_eval=t_eval,
+            rtol=1e-10,
+            atol=1e-10,
+            method="RK45",
+        )
+
+        delta_x = results.y
+
+        # Reconstruct reference orbit at requested times
+        x_ref = np.column_stack([
+            kepler_cartesian_motion(config.x0, t)
+            for t in t_eval
+        ])
+
+        # Actual orbit = reference + deviation
+        return x_ref + delta_x
         
 
 def propagate_sgp4(tle: str, t: float):
@@ -688,11 +911,11 @@ if __name__ == "__main__":
     T = 2*np.pi*np.sqrt(r0**3/mu)
     tf = t0+timedelta(seconds=T)
 
-    config = simulation_config(
+    config = simulation_config( 
         t0=t0,
         tf=tf,
         time_steps=100,
-        propagator_method="cowell",
+        propagator_method="encke",
         x0=x0,
         drag=False,
         J2=False,
