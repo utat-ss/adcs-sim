@@ -52,16 +52,3 @@ def plot_time_series(t, y_list, ylabels, title: str, xlabel: str = "Time [s]", s
         plt.legend()
         plt.grid()
         plt.show()
-
-
-if __name__ == "__main__":
-    # Example usage
-    import numpy as np
-
-    # Generating some example time series data
-    t = np.linspace(0, 10, 100)  # Time from 0 to 10 seconds
-    y1 = np.sin(t)  # Example data: sine wave
-    y2 = np.cos(t)  # Example data: cosine wave
-    y3 = np.sin(2 * t)  # Example data: sine wave with double frequency
-
-    plot_time_series(t, [y1, y2, y3], ylabels=['Amplitude', 'Phase', 'Frequency'], title='Example Time Series Plot', separate_plots=True)
