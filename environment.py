@@ -53,12 +53,16 @@ def atmospheric_density_kg_m3(
     Returns:
     float: Atmospheric mass density [kg/m^3].
     """
+    r_eci_m = np.asarray(r_eci_m, dtype=float)
     r_norm_m = np.linalg.norm(r_eci_m)
 
     if len(r_eci_m) != 3:
         raise ValueError("r_eci_m must be a tuple of length 3.")
+    
+    if type(epoch) != datetime:
+        raise ValueError("epoch must be of type datetime.")
 
-    if r_norm_m < const.EARTH_RADIUS_EQ_m:
+    if r_norm_m < const.EARTH_RADIUS_POLAR_m:
         raise ValueError("Position vector norm must not be less than the Earth's radius.")
 
     lla_coords = conv.eci_to_lla(r_eci_m, epoch)
@@ -68,7 +72,6 @@ def atmospheric_density_kg_m3(
     lats = np.array([lla_coords[1]])
     alts = np.array([lla_coords[2] / 1000.0])
 
-    # pymsis returns densities in cm^-3
     output = pymsis.calculate(
         dates,
         lons,
