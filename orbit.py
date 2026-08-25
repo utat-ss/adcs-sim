@@ -2,6 +2,7 @@
 
 from pydantic import BaseModel, field_validator, model_validator, ValidationInfo
 import numpy as np
+from utils import rot_x, rot_z
 
 class KeplerianElements(BaseModel):
     """
@@ -361,18 +362,16 @@ def keplerian2cartesian(kep: KeplerianElements, nu_rad: float, mu_km3_s2: float)
     Returns:
     x:          [np.ndarray] 6x1 Orbital state vector in cartesian inertial coordinates.
     """
-    raise NotImplementedError("Keplerian elements to cartesian state vector not implemented pending rotation tools")
-
+    
     # State vector in perifocal frame
     h_km2_s = get_ang_momentum(kep.a_km, kep.e, mu_km3_s2)
     r_w_km = h_km2_s**2 / mu_km3_s2 / (1 + kep.e * np.cos(nu_rad)) * np.array((np.cos(nu_rad), np.sin(nu_rad), 0))
     v_w_km_s = mu_km3_s2 / h_km2_s * np.array((-np.sin(nu_rad), kep.e + np.cos(nu_rad), 0))
 
     # Rotate to ECI
-    # TODO: rotation utils
-    R = C3(-om_rad) @ C1(-i_rad) @ C3(-Om_rad)
-    r_g_km = r_w_km @ R
-    v_g_km_s = v_w_km_s @ R
+    R = rot_z(kep.Om_rad) @ rot_x(kep.i_rad) @ rot_z(kep.om_rad)
+    r_g_km = R @ r_w_km
+    v_g_km_s = R @ v_w_km_s
 
     # Combine into single state vector
     x = np.hstack([r_g_km, v_g_km_s])
