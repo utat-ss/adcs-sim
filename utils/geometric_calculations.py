@@ -5,7 +5,6 @@ def angle_between_vectors(vector_1: np.ndarray, vector_2: np.ndarray) -> float:
     """
     Compute the angle [rad] between two nonzero vectors of the same dimension.
     """
-
     dot_p = np.dot(vector_1, vector_2)
     norm_1 = np.linalg.norm(vector_1)
     norm_2 = np.linalg.norm(vector_2)
@@ -59,8 +58,6 @@ def to_planar_vector(sat_vector: np.ndarray, body_vector: np.ndarray) -> np.ndar
     """
     
     coord_1 = np.dot(sat_vector, body_vector) / np.linalg.norm(sat_vector)
-    # print(sat_vector, body_vector)
-    # print(coord_1, sat_vector[0]*body_vector[0], np.dot(sat_vector, body_vector), np.linalg.norm(sat_vector))
     temp = (np.linalg.norm(body_vector) ** 2) - (coord_1 ** 2)
     if temp < 0.0:
         temp = round(temp, 10)
@@ -71,24 +68,25 @@ def to_planar_vector(sat_vector: np.ndarray, body_vector: np.ndarray) -> np.ndar
 
     return np.array([coord_1, coord_2])
 
-def from_planar_vector(sat_vector: np.ndarray, body_vector_3D: np.ndarray, body_vector_2D: np.ndarray) -> np.ndarray:
+def from_planar_vector(defining_vector_1_3D: np.ndarray, defining_vector_2_3D: np.ndarray, in_plane_vector_2D: np.ndarray) -> np.ndarray:
     """
-    Compute the 3D position vector representing the 2D vector body_vector_2D
-    within the origin-intersecting plane defined by 3D vectors sat_vector and body_vector_3D. 
-    The basis for the original planar coordinate system used is the set of unit vectors {sat_vector / |sat_vector|, 
-    (sat_vector x (body_vector x sat_vector)) / |sat_vector x (body_vector x sat_vector)|}.
+    Compute the 3D position vector representing the 2D vector in_plane_vector_2D within the 
+    origin-intersecting plane defined by 3D vectors defining_vector_1_3D and defining_vector_2_3D. 
+    The basis for the original planar coordinate system used is the set of unit vectors {defining_vector_1_3D / |defining_vector_1_3D|, 
+    (defining_vector_1_3D x (defining_vector_2_3D x defining_vector_1_3D)) / 
+    |defining_vector_1_3D x (defining_vector_2_3D x defining_vector_1_3D)|}.
     """
     
-    plane_normal = np.cross(body_vector_3D, sat_vector)
-    dir_vect_2 = np.cross(sat_vector, plane_normal)
+    plane_normal = np.cross(defining_vector_2_3D, defining_vector_1_3D)
+    dir_vect_2 = np.cross(defining_vector_1_3D, plane_normal)
 
-    unit_vect_1 = sat_vector / np.linalg.norm(sat_vector)
+    unit_vect_1 = defining_vector_1_3D / np.linalg.norm(defining_vector_1_3D)
     if np.array_equal(dir_vect_2, np.zeros(3)):
         unit_vect_2 = np.zeros(3)
     else:
         unit_vect_2 = dir_vect_2 / np.linalg.norm(dir_vect_2)
 
-    return unit_vect_1 * body_vector_2D[0] + unit_vect_2 * body_vector_2D[1]
+    return unit_vect_1 * in_plane_vector_2D[0] + unit_vect_2 * in_plane_vector_2D[1]
 
 def planar_projection(vect: np.ndarray, plane_normal: np.ndarray) -> np.ndarray:
     """
