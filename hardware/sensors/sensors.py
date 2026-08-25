@@ -8,6 +8,7 @@ from abc import ABC, abstractmethod
 import math
 from ...utils import geometric_calculations as gc
 from ...utils import quaternion_math as quat
+from ...utils import conversions as conv
 from ... import constants as const
 
 class VirtualSensor(ABC):
@@ -162,12 +163,12 @@ class VirtualFSS(VirtualSensor):
         return (alpha_deg, beta_deg)
 
     def measure(self, attitude_quat: np.ndarray, sun_vector: np.ndarray, sun_visibility: float, 
-                offset_quat: np.ndarray = np.array([0,0,0,1])) -> dict:
+                offset_rotmat: np.ndarray = np.identity(3)) -> dict:
         """
         Compute FSS angular output from coordinate transformation quaternions as well as sun, alpha, and beta vectors.
         The sun vector provided should be in a satellite-fixed non-rotating reference frame, with attitude_quat transforming 
         between this frame and a frame rotating with the satellite (where the unit vector [1, 0, 0] 
-        maps to the direction of the STR's boresight). Quaternion offset_quat then transforms between this
+        maps to the direction of the STR's boresight). Rotation matrix offset_rotmat then transforms between this
         coordinate system to an FSS-specific system in the same frame of reference (where the unit vectors [0, 1, 0] 
         and [0, 0, 1] map to the direction of the FSS's alpha and beta axes respectively by default).
 
@@ -183,9 +184,9 @@ class VirtualFSS(VirtualSensor):
                 Float between 0.0 (full eclipse) to 1.0 (sun fully visible) representing the 
                 approximate fraction of sun visible to a satellite positioned at the origin.
 
-            offset_quat:
-                Quaternion [x, y, z, w] transforming from general rotating satellite coordinate system
-                to FSS-specific system. 
+            offset_rotmat:
+                Rotation matrix transforming from general rotating satellite coordinate system
+                to FSS-specific system.
 
         Returns:
             Dictionary containing {
@@ -196,19 +197,18 @@ class VirtualFSS(VirtualSensor):
         """
         attitude_quat = np.asarray(attitude_quat, dtype=float)
         sun_vector = np.asarray(sun_vector, dtype=float)
-        offset_quat = np.asarray(offset_quat, dtype=float)
+        offset_rotmat = np.asarray(offset_rotmat, dtype=float)
 
-        if attitude_quat.shape != (4,) or np.linalg.norm(attitude_quat) == 0.0:
-            raise ValueError("attitude_quat must be a quaternion with nonzero norm.")
+        if attitude_quat.shape != (4,) or np.linalg.norm(attitude_quat) != 1.0:
+            raise ValueError("attitude_quat must be a quaternion with unit norm.")
         
         if sun_vector.shape != (3,) or np.linalg.norm(sun_vector) == 0.0:
             raise ValueError("sun_vector must be a nonzero 3D vector.")
         
-        if offset_quat.shape != (4,) or np.linalg.norm(offset_quat) == 0.0:
-            raise ValueError("offset_quat must be a quaternion with nonzero norm.")
+        if offset_rotmat.shape != (3,3) or np.linalg.norm(offset_rotmat) != 1.0:
+            raise ValueError("offset_rotmat must be a rotation matrix.")
 
-        attitude_quat = quat.normalize_quat(attitude_quat)
-        offset_quat = quat.normalize_quat(offset_quat)
+        offset_quat = conv.rotmat_to_quat(offset_rotmat)
 
         # Default reference axes in FSS coordinate system, which can be changed if desired:
         alpha_vector = np.array([0,1,0])
@@ -220,7 +220,7 @@ class VirtualFSS(VirtualSensor):
             "sun_present": False,
         }
 
-        sun_tolerance = 0.15 # Use more relevant value once known
+        sun_tolerance = 0.9 # Use more relevant value once known
 
         if sun_visibility < sun_tolerance:
             return no_sun_dict
@@ -267,7 +267,7 @@ class VirtualSTR(VirtualSensor):
         self.fov_rad: float = 0.0
         self.exclusion_rad: float = 0.0
         self.max_update_rate_hz: float = 0.0
-        self.max_body_rate_radhz: float = 0.0
+        self.max_body_rate_rad_s: float = 0.0
 
         # Measurement covariance matrix for [roll, pitch, yaw] in rad^2
         self.cov_rad2: np.ndarray = np.array([[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]], dtype=float)
@@ -290,7 +290,7 @@ class VirtualSTR(VirtualSensor):
         self.fov_rad = float(cfg["fov_full_cone_rad"])
         self.exclusion_rad = float(cfg["exclusion_full_cone_rad"])
         self.max_update_rate_hz = float(cfg["max_sensor_update_rate_hz"])
-        self.max_body_rate_radhz = float(cfg["max_total_body_rate_rad/s"]) # With Sagitta, should be ~2.5 deg/s
+        self.max_body_rate_rad_s = float(cfg["max_total_body_rate_rad/s"]) # With Sagitta, should be ~2.5 deg/s
         self.cov_rad2 = np.asarray(cfg["cov_matrix_rad2"], dtype=float)
         self.cov_diag = np.diag(self.cov_rad2)
 
@@ -368,7 +368,7 @@ class VirtualSTR(VirtualSensor):
 
         Returns: Boolean value which is True when the current body rate is greater than the known maximum.
         """
-        max_rate = self.max_body_rate_radhz
+        max_rate = self.max_body_rate_rad_s
         body_rate_vec_sum = np.linalg.norm(body_rates)
         
         if body_rate_vec_sum > max_rate:
@@ -412,8 +412,8 @@ class VirtualSTR(VirtualSensor):
         q_true = np.asarray(q_true, dtype=float)
         body_rates = np.asarray(body_rates, dtype=float)
 
-        if q_true.shape != (4,) or np.linalg.norm(q_true) == 0.0:
-            raise ValueError("q_true must be a quaternion with nonzero norm.")
+        if q_true.shape != (4,) or np.linalg.norm(q_true) != 1.0:
+            raise ValueError("q_true must be a quaternion with unit norm.")
         
         if body_rates.shape != (3,):
             raise ValueError("body_rates must have shape (3,).")
@@ -430,8 +430,6 @@ class VirtualSTR(VirtualSensor):
         
         if moon_vector.shape != (3,) or np.linalg.norm(moon_vector) == 0.0:
             raise ValueError("moon_vector must be a nonzero 3D vector.")
-        
-        q_true = quat.normalize_quat(q_true)
 
         noise_rad = np.random.multivariate_normal(np.zeros(3), self.cov_rad2)
 
