@@ -33,7 +33,7 @@ def j2_acceleration_m_s2(r_eci_m: tuple[float, float, float]) -> tuple[float, fl
 
     return (ax, ay, az)
 
-def atmospheric_density_kg_m3(
+def NRLMSIS_atmospheric_density_kg_m3(
     r_eci_m: tuple[float, float, float],
     epoch: datetime,
     f107: float = 150.0,
@@ -86,6 +86,11 @@ def atmospheric_density_kg_m3(
     total_mass_density_kg_m3 = output[0][0]
 
     return float(total_mass_density_kg_m3)
+
+def calc_atm_velocity_m_s():
+    """
+    """
+    pass
 
 def aerodynamic_drag_perturbation_m_s2(
     velocity_m_s: np.ndarray,
