@@ -23,4 +23,6 @@ packages = [
     "hardware",
     "hardware.sensors",
     "hardware.actuators",
+    "utils",
 ]
+py-modules = ["constants"]

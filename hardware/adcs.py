@@ -4,13 +4,14 @@ import json
 import numpy as np
 import math
 
-from sensors.sensors import (VirtualFSS, VirtualSTR,
+from hardware.sensors.sensors import (VirtualFSS, VirtualSTR,
 VirtualIMU, VirtualMTM, VirtualGNSS, 
 VirtualSensor)
-from actuators.actuators import (VirtualRWL, VirtualCMG, VirtualActuator)
 
-from ..utils import geometric_calculations as gc
-from .. import constants as const
+from hardware.actuators.actuators import (VirtualRWL, VirtualCMG, VirtualActuator)
+
+from utils import geometric_calculations as gc
+import constants as const
 
 SENSOR_ICD_DIR = Path("./sensors/icd")
 

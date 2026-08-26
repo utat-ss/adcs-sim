@@ -6,9 +6,9 @@ import numpy as np
 from abc import ABC, abstractmethod
 
 import math
-from ...utils import geometric_calculations as gc
-from ...utils import quaternion_math as quat
-from ... import constants as const
+from utils import geometric_calculations as gc
+from utils import quaternion_math as quat
+import constants as const
 
 class VirtualSensor(ABC):
     def __init__(self, cfg_file: Path):
