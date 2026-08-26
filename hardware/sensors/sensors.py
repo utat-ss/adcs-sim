@@ -183,6 +183,7 @@ class VirtualFSS(VirtualSensor):
             sun_visibility:
                 Float between 0.0 (full eclipse) to 1.0 (sun fully visible) representing the 
                 approximate fraction of sun visible to a satellite positioned at the origin.
+                Boolean input can also be used.
 
             offset_rotmat:
                 Rotation matrix transforming from general rotating satellite coordinate system
@@ -205,8 +206,8 @@ class VirtualFSS(VirtualSensor):
         if sun_vector.shape != (3,) or np.linalg.norm(sun_vector) == 0.0:
             raise ValueError("sun_vector must be a nonzero 3D vector.")
         
-        if offset_rotmat.shape != (3,3) or np.linalg.norm(offset_rotmat) != 1.0:
-            raise ValueError("offset_rotmat must be a rotation matrix.")
+        if offset_rotmat.shape != (3, 3) or round(np.linalg.norm(offset_rotmat, ord=2), 5) != 1.0:
+            raise ValueError("offset_rotmat must be a rotation matrix of shape (3, 3).")
 
         offset_quat = conv.rotmat_to_quat(offset_rotmat)
 
