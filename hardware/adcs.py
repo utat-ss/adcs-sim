@@ -90,10 +90,12 @@ class ADCS:
         return is_valid, error
     
     @staticmethod
-    def eval_eclipse_heuristic(sun_vector: np.ndarray, earth_vector: np.ndarray, earth_radius: float = const.EARTH_RADIUS_EQ_m) -> bool:
+    def eval_eclipse_heuristic(sun_vector: np.ndarray, earth_vector: np.ndarray, 
+                               earth_radius: float = const.EARTH_RADIUS_EQ_m, recalc_equiangular_dist = False) -> bool:
         """
         Determine whether the sun is being eclipsed by the Earth using a computationally light
-        heuristic. Only usable when the satellite is relatively close to the Earth's surface.
+        heuristic, as well as whether this heuristic is likely to be accurate. Assumes that the Earth
+        is closer than the sun to the satellite.
         
         Arguments:
 
@@ -104,26 +106,50 @@ class ADCS:
                 Earth position vector in arbitrary Cartesian coordinate system.
 
             earth_radius:
-                Radius of the Earth.
+                Radius of the Earth [m].
 
-        Returns: Boolean value which is True when the sun is being eclipsed.
+            recalc_equiangular_dist:
+                Boolean value which is True when equiangular_dist is to be recalculated in the function.
+
+        Returns: 
+            Tuple (sun_is_eclipsed, heuristic_accuracy) where:
+                sun_is_eclipsed: Boolean value which is True when the sun is being eclipsed.
+                heuristic_accuracy: Boolean value which is True when confidence in the heuristic is high.
+                    Becomes False when the satellite meets the cylindrical shadow-based heuristic
+                    but is outside of the Earth's shadow cone.
         """
-
         sun_vector = np.asarray(sun_vector, dtype=float)
         earth_vector = np.asarray(earth_vector, dtype=float)
         
         if sun_vector.shape != (3,) or earth_vector.shape != (3,):
             raise ValueError("sun_vector and earth_vector must both be 3D vectors.")
+        
+        earth_to_sun_vector = sun_vector - earth_vector
 
-        # Returns magnitude of earth_vector's projection onto the plane normal to sun_vector: 
-        earth_projection = gc.planar_projection(earth_vector, sun_vector)
-        proj_magnitude = np.linalg.norm(earth_projection)
+        # equiangular_dist is the distance outward from Earth [m] at which the sun and Earth have equal angular sizes:
+        equiangular_dist = 1.384194765 * (10 ** 9) # equiangular_dist when Earth is 1 AU from sun
+        if recalc_equiangular_dist: 
+            earth_sun_dist = np.linalg.norm(earth_to_sun_vector)
+            equiangular_dist = (earth_radius * earth_sun_dist) / (const.SUN_RADIUS_m - earth_radius)
+
+        # Returns magnitude of earth_vector's projection onto the plane normal to earth_to_sun_vector: 
+        earth_projection = gc.planar_projection(earth_vector, earth_to_sun_vector)
+        proj_magnitude_perpend = np.linalg.norm(earth_projection)
 
         sun_dot_earth = np.dot(sun_vector, earth_vector)
 
-        if proj_magnitude < earth_radius and sun_dot_earth > 0:
-            return True
-        return False
+        if proj_magnitude_perpend < earth_radius and sun_dot_earth > 0:
+            # Returns magnitude of earth_vector's projection onto earth_to_sun_vector: 
+            earth_sun_line_projection = gc.project_vector(earth_vector, earth_to_sun_vector)
+            proj_magnitude_parallel = np.linalg.norm(earth_sun_line_projection)
+
+            if proj_magnitude_parallel > equiangular_dist: # The heuristic is likely to be inaccurate past equiangular_dist
+                heuristic_accuracy = False
+            else: # If the satellite is outside of the Earth's shadow cone (approximated below), confidence in the heuristic is low
+                temp = (equiangular_dist - proj_magnitude_parallel) * earth_radius / equiangular_dist
+                heuristic_accuracy = (proj_magnitude_perpend < temp)
+            return (True, bool(heuristic_accuracy))
+        return (False, True) # The heuristic is essentially always accurate when returning sun_is_eclipsed == False
 
     @staticmethod
     def eval_eclipse_fine(sun_vector: np.ndarray, body_vector: np.ndarray, body_radius: float) -> float:
