@@ -6,7 +6,7 @@ from constants import G, M, mu, e
 from collections.abc import Callable
 from datetime import datetime, timezone, timedelta
 from scipy.integrate import solve_ivp
-from environment import j2_acceleration_m_s2, aerodynamic_drag_perturbation_m_s2
+import environment as env
 
 
 class simulation_config():
@@ -581,9 +581,11 @@ def cowell_motion(x: np.ndarray, add_drag: bool, add_J2: bool) -> np.ndarray:
     r_mag = np.linalg.norm(r_vec) # magnitude of r vector
     p_m_s2 = np.array([0., 0., 0.]) # initialize perturbing acceleration vector
     if add_J2:
-        p_m_s2 += j2_acceleration_m_s2(r_vec)
+        p_m_s2 += env.j2_acceleration_m_s2(r_vec)
     if add_drag:
-        p_m_s2 += aerodynamic_drag_perturbation_m_s2(velocity_m_s=dr, velocity_atm_m_s=np.array([0., 0., 0.]), air_kg_m3=1e-12, drag_coeff=2.2, area_m_2=0.03, mass_kg=1.0)#  may wanna include the parameters used to include drag in our satellite configuration file
+        air_velocity_eci_m_s = env.calc_atm_velocity_m_s(r_vec)
+        air_density = env.NRLMSIS_atmospheric_density_kg_m3(r_vec, np.array([0,0,7.292115*10**(-5)])) # should be replaced with more accurate, varying angular velocity value later
+        p_m_s2 += env.aerodynamic_drag_perturbation_m_s2(dr, air_velocity_eci_m_s, air_density, drag_coeff=2.2, area_m_2=0.03, mass_kg=5.0) # may wanna include the parameters used to include drag in our satellite configuration file
 
     dv = (-mu*r_vec/(r_mag)**3)+p_m_s2
     
@@ -617,9 +619,11 @@ def encke_motion(t: float, x_ref: np.ndarray, delta_x: np.ndarray, add_drag: boo
     
     p_m_s2 = np.array([0., 0., 0.]) # initialize perturbing acceleration vector
     if add_J2:
-        p_m_s2 += j2_acceleration_m_s2(r_ref+delta_r)
+        p_m_s2 += env.j2_acceleration_m_s2(r_ref+delta_r)
     if add_drag:
-        p_m_s2 += aerodynamic_drag_perturbation_m_s2(velocity_m_s=v_ref, velocity_atm_m_s=np.array([0., 0., 0.]), air_kg_m3=1e-12, drag_coeff=2.2, area_m_2=0.03, mass_kg=1.0) #  may wanna include the parameters used to include drag in our satellite configuration file
+        air_velocity_eci_m_s = env.calc_atm_velocity_m_s(r_ref+delta_r)
+        air_density = env.NRLMSIS_atmospheric_density_kg_m3(r_ref+delta_r, np.array([0,0,7.292115*10**(-5)])) # should be replaced with more accurate, varying angular velocity value later
+        p_m_s2 += env.aerodynamic_drag_perturbation_m_s2(v_ref, air_velocity_eci_m_s, air_density, drag_coeff=2.2, area_m_2=0.03, mass_kg=5.0) #  may wanna include the parameters used to include drag in our satellite configuration file
     
     delta_r_dot_dot = a + p_m_s2
 
