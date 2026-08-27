@@ -320,6 +320,41 @@ def quat_to_rotmat(q: np.ndarray) -> np.ndarray:
 
     return R
 
+def rotmat_to_quat(rotmat: np.ndarray) -> np.ndarray:
+    """
+    Convert 3x3 rotation matrix to a quaternion [x, y, z, w]. Note that other methods
+    of performing this operation exist, which may be more numerically efficient in some cases.
+
+    Parameters
+    ----------
+    np.ndarray, shape (3, 3)
+        Rotation matrix.
+
+    Returns
+    -------
+    q : array-like, shape (4,)
+        Quaternion in [x, y, z, w] convention.
+    """
+    rotmat = np.asarray(rotmat, dtype=float)
+
+    if rotmat.shape != (3, 3) or round(np.linalg.norm(rotmat, ord=2), 5) != 1.0:
+        raise ValueError("rotmat must be a rotation matrix of shape (3, 3).")
+
+    trace = np.linalg.trace(rotmat)
+    w = 0.5 * math.sqrt(1 + trace)
+    abs_x = 0.5 * math.sqrt(1 + rotmat[0][0] - rotmat[1][1] - rotmat[2][2])
+    abs_y = 0.5 * math.sqrt(1 - rotmat[0][0] + rotmat[1][1] - rotmat[2][2])
+    abs_z = 0.5 * math.sqrt(1 - rotmat[0][0] - rotmat[1][1] + rotmat[2][2])
+
+    q = np.array([
+        abs_x * np.sign(rotmat[2][1] - rotmat[1][2]),
+        abs_y * np.sign(rotmat[0][2] - rotmat[2][0]),
+        abs_z * np.sign(rotmat[1][0] - rotmat[0][1]),
+        w
+    ])
+
+    return q
+
 def rot_x(theta_rad: float) -> np.ndarray:
     """
     Returns the rotation matrix around the X-axis (C1)
