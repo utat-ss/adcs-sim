@@ -89,7 +89,7 @@ class VirtualFSS(VirtualSensor):
                 beta_deg: signed y-z plane angle [deg]
         """
         incident_light_sensor = np.asarray(incident_light_sensor, dtype=float)
-        if incident_light_sensor.shape != (3,) or np.linalg.norm(incident_light_sensor) == 0:
+        if incident_light_sensor.shape != (3,) or np.linalg.norm(incident_light_sensor) == 0.0:
             raise ValueError("incident_light_sensor must be a nonzero 3D vector.")
 
         alpha_rad = np.arctan2(incident_light_sensor[0], incident_light_sensor[2])
@@ -175,7 +175,7 @@ class VirtualFSS(VirtualSensor):
         Arguments:
 
             attitude_quat: 
-                Attitude quaternion [x, y, z, w] representing the satellite's current orientation.
+                Attitude unit quaternion [x, y, z, w] representing the satellite's current orientation.
             
             sun_vector:
                 3D sun position vector.
@@ -200,7 +200,7 @@ class VirtualFSS(VirtualSensor):
         sun_vector = np.asarray(sun_vector, dtype=float)
         offset_rotmat = np.asarray(offset_rotmat, dtype=float)
 
-        if attitude_quat.shape != (4,) or np.linalg.norm(attitude_quat) != 1.0:
+        if attitude_quat.shape != (4,) or round(np.linalg.norm(attitude_quat), 8) != 1.0:
             raise ValueError("attitude_quat must be a quaternion with unit norm.")
         
         if sun_vector.shape != (3,) or np.linalg.norm(sun_vector) == 0.0:
@@ -316,10 +316,10 @@ class VirtualSTR(VirtualSensor):
         Returns: Boolean value which is True when the given stellar body is in the given FOV.
         """
 
-        if sat_vector.shape != (3,) or np.linalg.norm(sat_vector) == 0:
+        if sat_vector.shape != (3,) or np.linalg.norm(sat_vector) == 0.0:
             raise ValueError("sat_vector must be a nonzero 3D vector.")
         
-        if body_vector.shape != (3,) or np.linalg.norm(body_vector) == 0:
+        if body_vector.shape != (3,) or np.linalg.norm(body_vector) == 0.0:
             raise ValueError("body_vector must be a nonzero 3D vector.")
   
         if fov_type not in ["regular", "exclusion"]:
@@ -385,7 +385,7 @@ class VirtualSTR(VirtualSensor):
 
         Arguments:
             q_true:
-                True attitude quaternion [x, y, z, w].
+                True attitude unit quaternion [x, y, z, w].
 
             body_rates:
                 Current body rates [x_rate, y_rate, z_rate] along each axis in rad/s, 
@@ -413,7 +413,7 @@ class VirtualSTR(VirtualSensor):
         q_true = np.asarray(q_true, dtype=float)
         body_rates = np.asarray(body_rates, dtype=float)
 
-        if q_true.shape != (4,) or np.linalg.norm(q_true) != 1.0:
+        if q_true.shape != (4,) or round(np.linalg.norm(q_true), 8) != 1.0:
             raise ValueError("q_true must be a quaternion with unit norm.")
         
         if body_rates.shape != (3,):
