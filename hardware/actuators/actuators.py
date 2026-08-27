@@ -3,6 +3,7 @@
 from pathlib import Path
 from abc import ABC, abstractmethod
 import numpy as np
+import json as json
 
 class VirtualActuator(ABC):
     def __init__(self, cfg_file: Path):
@@ -27,14 +28,14 @@ class VirtualCMG(VirtualActuator):
     """
     Generic virtual Control Moment Gyroscope model for use in simulation
     """
-    def __init__(self, cfg_file: Path = None, max_gimbal_rate: float = 1.0, tau: float = 0.05):
+    def __init__(self, cfg_file: Path):
         super().__init__(cfg_file)
-        self.model: str = "Generic CMG"
 
-        self.max_gimbal_rate =  max_gimbal_rate  # Maximum gimbal rate [rad/s]
-        self.tau = tau  # Gimbal time constant [seconds]
-        self.gimbal_rate = 0.0 # Current true gimbal rate [rad/s]
-        self.gimbal_angle = 0.0 # Current gimbal angle [rad]
+        self.model: str = "Generic CMG"  # Model name
+        self.max_gimbal_rate_rad_s: float = 0.0  # Maximum gimbal rate [rad/s]
+        self.tau_s: float = 0.0  # Gimbal time constant [s]
+
+        self._load_cfg(cfg_file)
 
     def _load_cfg(self, cfg_file: Path):
         """
@@ -46,9 +47,15 @@ class VirtualCMG(VirtualActuator):
         Returns:
         None
         """
-        # TODO: Config file format
+
+        cfg_file = Path(cfg_file)
+        if not cfg_file.exists():
+            raise FileNotFoundError(f"CMG config file not found: {cfg_file}")
         with open(cfg_file, 'r') as f:
-            raise NotImplementedError()
+            cfg = json.load(f)
+        self.model = cfg.get("model", self.model)
+        self.max_gimbal_rate_rad_s = float(cfg["max_gimbal_rate_rad_s"])
+        self.tau_s = float(cfg["tau_s"])
         
     def command(self, target_gimbal_rate: np.ndarray, dt: float = 0.01) -> np.ndarray:
         """
