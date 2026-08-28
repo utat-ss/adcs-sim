@@ -2,7 +2,9 @@
 
 from pydantic import BaseModel, field_validator, model_validator, ValidationInfo
 import numpy as np
-from constants import G, M
+from constants import G, M, mu
+from collections.abc import Callable
+from root_finding import *
 
 class KeplerianElements(BaseModel):
     """
@@ -432,6 +434,42 @@ def cartesian2keplerian(x: np.ndarray, mu_km3_s2: float) -> tuple[KeplerianEleme
 
     return kep, nu_rad
 
+
+def kepler_motion(kep: KeplerianElements, t: float):
+    """
+    Unperturbed keplerian propagator. 
+    Given an orbital state described by x0, recorded at t0, return the propagated orbital state at time t.
+
+    Arguments:
+    kep:    KeplerianElements that describe the orbit. (semi-major axis [km], eccentricity, inclination [rad], right ascension of the ascending node [rad], argument of periapsis [rad])
+    t:      (float) Time since periapsis.
+
+    Output:
+    r_osc_mag:     (float) Distance from central body of orbit to the spacecraft
+    """
+    a = kep.a_km
+    n = np.sqrt(mu/a**3) # mean motion
+    M = n*(t) 
+    e = kep.e
+    # in the normal formula: tp = time of periapsis, t = current time, and M = n*(t-tp)
+    # but here the t is already current time - time of periapsis, so we pass that in
+
+    E = newton_method(M, 
+                      lambda E: E - e*np.sin(E) - M, # the equation we equate to 0 and are solving for
+                      lambda E: 1 - e*np.cos(E)      # the derivative of equation we are solving for
+                      )
+
+
+    v = 2 * np.arctan2(np.sqrt(1 + e) * np.sin(E / 2),
+                       np.sqrt(1 - e) * np.cos(E / 2)
+                       ) # true anomaly
+    
+    r_osc_mag = a * (1-e**2) / (1+e*np.cos(v))
+
+    return r_osc_mag
+    
+
+
 def mee_motion(me: ModifiedEquinoctialElements, L_rad: float, p_rsw_m2_s2: np.ndarray, mu_km3_s2: float) -> np.ndarray:
     """
     Given an orbital state described by MEEs and any perturbations in the Radial-Cross-track-Along-track frame (RSW),
@@ -471,6 +509,7 @@ def mee_motion(me: ModifiedEquinoctialElements, L_rad: float, p_rsw_m2_s2: np.nd
 
     return medot
 
+
 def cowell_motion(x: np.ndarray, p_m_s2: np.ndarray) -> np.ndarray:
     """
     Calculate the orbital motion of a Cartesian state using Cowell's method.
@@ -482,8 +521,6 @@ def cowell_motion(x: np.ndarray, p_m_s2: np.ndarray) -> np.ndarray:
     Returns:
     xdot:   (np.ndarray) (6,) Orbit motion.
     """
-    mu = G*M
-
     dr = x[3:6] # is shape (3,)
 
     r_vec = x[0:3] # is shape (3,)
@@ -494,19 +531,43 @@ def cowell_motion(x: np.ndarray, p_m_s2: np.ndarray) -> np.ndarray:
     xdot = np.concatenate((dr, dv))  # is shape (6,)
     return xdot
 
-def encke_motion(x: np.ndarray):
+def encke_motion(t: float, state: list[np.ndarray], p_m_s2: np.ndarray):
     """
     Calculate the orbital motion of a Cartesian state using Encke's method.
 
     Arguments:
-    x:      (np.ndarray) (6x1) Orbital state vector.
-    p_m2_s2 (np.ndarray) (3x1) Perturbing accelerations.
+    state: augmented state vector, list of 2 np.ndarrays, 
+        1. x: (np.ndarray) (delta_r, delta_r_dot) (deviation).
+        2, r: (np.ndarray) (6,) (r, v).
+    p_m_s2: (np.ndarray) (3,) Perturbing accelerations.
 
     Returns:
-    xdot:   (np.ndarray) (6x1) Orbit motion.
+    xdot:   (np.ndarray) (6,)  (delta_r, delta_r_dot) (deviation's derivative).
     """
-    # TODO: Implementation
-    xdot = np.array([0., 0., 0., 0., 0., 0.])
+
+    x = state[0:5]
+    r = state[6:11]
+    r_vec = r[0:3]
+    r_mag = np.linalg.norm(r_vec) # magnitude of r vector
+
+    kep = cartesian2keplerian(r, mu) # for now assume we are only doing encke motion for orbit around Earth
+    r_osc = kepler_motion(kep, t) # r_osc is distance from center of primary body to the spacecraft along the osculating (unperturbed) orbit
+
+    delta_r_dot = x[3:6] # (3,)
+
+    delta_r = x[0:3] # (3,)
+
+    a = -mu/r_osc**3 # (1, )
+    b = 2*r_vec - delta_r  # (3, )
+    c = np.dot(delta_r, b) # (1, )
+    d = c / (r_mag**2) # (1, )
+    e = 1 - d**(3/2) # (1,)
+    f = e*r_vec # (3, )
+    
+    delta_r_dot_dot = a*(delta_r - f) + p_m_s2
+
+    xdot = np.concatenate((delta_r_dot, delta_r_dot_dot)) # (6,)
+
     return xdot
 
 def propagate_sgp4(tle: str, t: float):
