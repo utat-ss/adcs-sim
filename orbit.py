@@ -2,12 +2,16 @@
 
 from pydantic import BaseModel, field_validator, model_validator, ValidationInfo
 import numpy as np
-from constants import G, M, mu, e
+from constants import G_m3_kgs2, M_kg, EARTH_MU_m3_s2
 from collections.abc import Callable
 from datetime import datetime, timezone, timedelta
 from scipy.integrate import solve_ivp
 import environment as env
 
+G = G_m3_kgs2
+M = M_kg
+mu = EARTH_MU_m3_s2
+e = np.e
 
 class simulation_config():
     """
@@ -29,7 +33,6 @@ class simulation_config():
         self.x0 = x0
         self.drag = drag
         self.J2 = J2
-    
 
 class KeplerianElements(BaseModel):
     """
