@@ -667,7 +667,7 @@ def kepler_cartesian_motion(
     x0_m,
     t,
     mu_m3_s2=mu,
-    tolerance=1e-10,
+    tolerance=1e-7,
     max_iter=100,
 ):
     """
