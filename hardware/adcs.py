@@ -54,6 +54,7 @@ class ADCS:
 
         Returns:
         is_valid:   (bool) Validity of the Moment of Inertia matrix.
+        error:      (int) Error code indicating the type of invalidity, if any.
         """
         # Default condition
         is_valid = True
@@ -61,32 +62,26 @@ class ADCS:
         
         # Symmetry
         if not np.max(np.abs(moi - moi.T)) < 1e-12:
-            is_valid = False
-            error = -1 # non-symmetric
+            return False, -1 # error code -1: non-symmetric
 
         # Positive-definite
         if np.any(np.less_equal(np.linalg.eig(moi), 0)):
-            is_valid = False
-            error = -2 # not positive-definite
+            return False, -2 # error code -2: not positive-definite
 
         # Triangle inequality
         principals = np.linalg.diagonal(moi)
         sum_of_principals = np.sum(principals)
         for el in principals:
             if el > sum_of_principals - el:
-                is_valid = False
-                error = -3 # triangle inequality not satisfied
+                return False, -3 # error code -3: triangle inequality not satisfied
         
         # Products of inertia bounds
         if not moi[0,0] * moi[1,1] > moi[0,1]**2:
-            is_valid = False
-            error = -4 # non-physical mass distribution
+            return False, -4 # error code -4: non-physical mass distribution
         if not moi[0,0] * moi[2,2] > moi[0,2]**2:
-            is_valid = False
-            error = -4
+            return False, -4 # error code -4: non-physical mass distribution
         if not moi[1,1] * moi[2,2] > moi[1,2]**2:
-            is_valid = False
-            error = -4
+            return False, -4 # error code -4: non-physical mass distribution
 
         return is_valid, error
     
