@@ -60,3 +60,52 @@ def test_validate_moi_non_symetric():
     assert result is False
     assert error_code == -1
 
+@pytest.mark.parametrize(
+    "moi_negative_eigenvalue",
+    [
+        pytest.param(
+            np.array([[-1, 0, 0], [0, 1, 0], [0, 0, 1]]),
+            id="negative-eigenvalue-1",
+        ),
+        pytest.param(
+            np.array([[1, 0, 0], [0, -1, 0], [0, 0, 1]]),
+            id="negative-eigenvalue-2",
+        ),
+        pytest.param(
+            np.array([[1, 0, 0], [0, 1, 0], [0, 0, -1]]),
+            id="negative-eigenvalue-3",
+        ),
+    ],
+)
+def test_validate_moi_negative_eigenvalue(moi_negative_eigenvalue):
+    adcs = ADCS("test", np.eye(3))
+
+    result, error_code = adcs._validate_moi(moi_negative_eigenvalue)
+
+    assert result is False
+    assert error_code == -2
+
+@pytest.mark.parametrize(
+    "moi_triangle_inequality",
+    [
+        pytest.param(
+            np.array([[1, 0, 0], [0, 2, 0], [0, 0, 4]]),
+            id="triangle-inequality-1",
+        ),
+        pytest.param(
+            np.array([[1, 0, 0], [0, 4, 0], [0, 0, 1]]),
+            id="triangle-inequality-2",
+        ),
+        pytest.param(
+            np.array([[4, 0, 0], [0, 1, 0], [0, 0, 2]]),
+            id="triangle-inequality-3",
+        ),
+    ],
+)
+def test_validate_moi_triangle_inequality(moi_triangle_inequality):
+    adcs = ADCS("test", np.eye(3))
+
+    result, error_code = adcs._validate_moi(moi_triangle_inequality)
+
+    assert result is False
+    assert error_code == -3
