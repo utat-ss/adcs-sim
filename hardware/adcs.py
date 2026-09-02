@@ -65,7 +65,7 @@ class ADCS:
             return False, -1 # error code -1: non-symmetric
 
         # Positive-definite
-        if np.any(np.less_equal(np.linalg.eig(moi), 0)):
+        if np.any(np.less_equal(np.linalg.eig(moi)[0], 0)):
             return False, -2 # error code -2: not positive-definite
 
         # Triangle inequality
