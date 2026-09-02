@@ -41,3 +41,14 @@ def test_find_config_path_not_existing_model():
 
     with pytest.raises(FileNotFoundError):
         adcs._find_config_path("does-not-exist-model")
+
+
+# Tests for _validate_moi method of ADCS class
+def test_validate_moi_non_symetric():
+    adcs = ADCS("test", np.eye(3))
+
+    non_symmetric_moi = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+    result, error_code = adcs._validate_moi(non_symmetric_moi)
+
+    assert result is False
+    assert error_code == -1
