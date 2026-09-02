@@ -44,6 +44,13 @@ def test_find_config_path_not_existing_model():
 
 
 # Tests for _validate_moi method of ADCS class
+def test_validate_moi_valid(adcs):
+    valid_moi = np.diag([2.0, 3.0, 4.0])
+    result, error_code = adcs._validate_moi(valid_moi)
+
+    assert result is True
+    assert error_code is 0
+
 def test_validate_moi_non_symetric():
     adcs = ADCS("test", np.eye(3))
 
@@ -52,3 +59,4 @@ def test_validate_moi_non_symetric():
 
     assert result is False
     assert error_code == -1
+
