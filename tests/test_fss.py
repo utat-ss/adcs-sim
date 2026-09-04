@@ -21,8 +21,9 @@ def mock_fss():
 
 def test_sun_vector_fov(mock_fss):
     sun_vector = np.array([1.0, 0.0, 1.0])
+    matrix = np.identity(3)
 
-    output = mock_fss._angle_computation(sun_vector)
+    output = mock_fss.measure(sun_vector, matrix)
 
     assert output["sun_present"] == True
     assert output["alpha_deg"] == pytest.approx(45.0)
@@ -31,8 +32,9 @@ def test_sun_vector_fov(mock_fss):
 
 def test_sun_vector_out_of_fov(mock_fss):
     sun_vector = np.array([2.0, 0.0, 1.0])
+    matrix = np.identity(3)
 
-    output = mock_fss._angle_computation(sun_vector)
+    output = mock_fss.measure(sun_vector, matrix)
 
     assert output["sun_present"] == False
     assert output["alpha_deg"] == pytest.approx(63.43, abs = 0.5)
@@ -40,8 +42,9 @@ def test_sun_vector_out_of_fov(mock_fss):
 
 def test_eclipse_vector(mock_fss):
     sun_vector = np.array([0.0, 0.0, 0.0])
+    matrix = np.identity(3)
 
-    output = mock_fss._angle_computation(sun_vector)
+    output = mock_fss.measure(sun_vector, matrix)
 
     assert output["sun_present"] == False
     assert output["alpha_deg"] == pytest.approx(0.0)
@@ -49,12 +52,14 @@ def test_eclipse_vector(mock_fss):
 
 def test_statistically_consistent_noise(mock_fss):
     sun_vector = np.array([0.0, 0.0, 1.0])
+    matrix = np.identity(3)
+    
     num_samples = 1000
     alpha_samples = []
     beta_samples = []
 
     for _ in range(num_samples):
-        output = mock_fss._angle_computation(sun_vector)
+        output = mock_fss.measure(sun_vector, matrix)
         alpha_samples.append(output["alpha_deg"])
         beta_samples.append(output["beta_deg"])
 
