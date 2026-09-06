@@ -1,6 +1,7 @@
 from datetime import datetime
 
 import numpy as np
+import math
 import pymsis
 from utils import conversions as conv
 import constants as const
@@ -86,6 +87,31 @@ def NRLMSIS_atmospheric_density_kg_m3(
     total_mass_density_kg_m3 = output[0][0]
 
     return float(total_mass_density_kg_m3)
+
+def approximate_atmospheric_density_kg_m3(r_eci_m: np.ndarray) -> float:
+    """
+    Calculate the approximate atmopheric density at position r_eci_m.
+    """
+    r_eci_m = np.asarray(r_eci_m, dtype=float)
+    semi_major = const.EARTH_RADIUS_EQ_m
+    semi_minor = const.EARTH_RADIUS_POLAR_m
+
+    dist = np.sqrt(r_eci_m[0] ** 2 + r_eci_m[1] ** 2)
+    geocentric_latitude = math.atan2(r_eci_m[2], dist)
+
+    ellipsoid_height = semi_major * semi_minor / (math.sqrt(semi_minor**2 + (semi_major**2 - semi_minor**2) * (math.sin(geocentric_latitude))**2))
+    altitude = (np.linalg.norm(r_eci_m) - ellipsoid_height) / 1000
+
+    # Air density model most valid from 180-500km altitudes (see https://www.spaceacademy.net.au/watch/debris/atmosmod.htm):
+    F10 = 115 # Average value of solar EUV flux proxy, solar radio 10cm flux
+    Ap = 10 # Average value of geomagnetic activity proxy, geomagnetic Ap index
+    T = 900 + 2.5 * (F10 - 70) + 1.5 * Ap
+    mu = 27 - 0.012 * (altitude - 200)
+    H = T / mu
+
+    density = 6 * (10 ** (-10)) * math.exp(-1 * (altitude - 175)/H)
+    
+    return density
 
 def calc_atm_velocity_m_s(r_eci_m: np.ndarray, earth_ang_velocity_rad_s: np.ndarray):
     """

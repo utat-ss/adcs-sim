@@ -586,8 +586,8 @@ def cowell_motion(x: np.ndarray, add_drag: bool, add_J2: bool) -> np.ndarray:
     if add_J2:
         p_m_s2 += env.j2_acceleration_m_s2(r_vec)
     if add_drag:
-        air_velocity_eci_m_s = env.calc_atm_velocity_m_s(r_vec)
-        air_density = env.NRLMSIS_atmospheric_density_kg_m3(r_vec, np.array([0,0,7.292115*10**(-5)])) # should be replaced with more accurate, varying angular velocity value later
+        air_velocity_eci_m_s = env.calc_atm_velocity_m_s(r_vec, np.array([0,0,7.292115*10**(-5)])) # should be replaced with more accurate, varying angular velocity value later
+        air_density = env.approximate_atmospheric_density_kg_m3(r_vec) 
         p_m_s2 += env.aerodynamic_drag_perturbation_m_s2(dr, air_velocity_eci_m_s, air_density, drag_coeff=2.2, area_m_2=0.03, mass_kg=5.0) # may wanna include the parameters used to include drag in our satellite configuration file
 
     dv = (-mu*r_vec/(r_mag)**3)+p_m_s2
@@ -624,8 +624,8 @@ def encke_motion(t: float, x_ref: np.ndarray, delta_x: np.ndarray, add_drag: boo
     if add_J2:
         p_m_s2 += env.j2_acceleration_m_s2(r_ref+delta_r)
     if add_drag:
-        air_velocity_eci_m_s = env.calc_atm_velocity_m_s(r_ref+delta_r)
-        air_density = env.NRLMSIS_atmospheric_density_kg_m3(r_ref+delta_r, np.array([0,0,7.292115*10**(-5)])) # should be replaced with more accurate, varying angular velocity value later
+        air_velocity_eci_m_s = env.calc_atm_velocity_m_s(r_ref+delta_r, np.array([0,0,7.292115*10**(-5)])) # should be replaced with more accurate, varying angular velocity value later
+        air_density = 1.0e-15#env.approximate_atmospheric_density_kg_m3(r_ref+delta_r)
         p_m_s2 += env.aerodynamic_drag_perturbation_m_s2(v_ref, air_velocity_eci_m_s, air_density, drag_coeff=2.2, area_m_2=0.03, mass_kg=5.0) #  may wanna include the parameters used to include drag in our satellite configuration file
     
     delta_r_dot_dot = a + p_m_s2
@@ -836,7 +836,7 @@ def propagate_orbit(config: simulation_config):
     """
     if config.propagator_method == "cowell":
         t_span = (0.0, (config.tf - config.t0).total_seconds())
-        results = solve_ivp(fun=lambda t, x: cowell_motion(x, add_drag=config.drag, add_J2=config.J2), 
+        results = solve_ivp(fun=lambda t, x: cowell_motion(x, add_drag=config.drag, add_J2=config.J2),
                          t_span = (0.0, (config.tf - config.t0).total_seconds()),
                          y0=config.x0,
                          t_eval=np.linspace(t_span[0], t_span[1], config.time_steps),
