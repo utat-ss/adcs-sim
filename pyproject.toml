@@ -1,9 +1,26 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "adcs-sim"
 version = "0.1.0"
-description = "Add your description here"
+description = "Repo for holding all code on the generalized ADCS simulator and controller."
 readme = "README.md"
 requires-python = ">=3.12"
+license = "MIT"
 dependencies = [
     "numpy>=2.4.6",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+]
+
+[tool.setuptools]
+packages = [
+    "hardware",
+    "hardware.sensors",
+    "hardware.actuators",
 ]

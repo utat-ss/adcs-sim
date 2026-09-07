@@ -2,11 +2,15 @@ from pathlib import Path
 import json
 
 import numpy as np
+import math
 
 from sensors.sensors import (VirtualFSS, VirtualSTR,
 VirtualIMU, VirtualMTM, VirtualGNSS, 
 VirtualSensor)
 from actuators.actuators import (VirtualRWL, VirtualCMG, VirtualActuator)
+
+from ..utils import geometric_calculations as gc
+from .. import constants as const
 
 SENSOR_ICD_DIR = Path("./sensors/icd")
 
@@ -84,6 +88,145 @@ class ADCS:
             error = -4
 
         return is_valid, error
+    
+    @staticmethod
+    def eval_eclipse_heuristic(sun_vector: np.ndarray, earth_vector: np.ndarray, 
+                               earth_radius: float = const.EARTH_RADIUS_EQ_m, recalc_equiangular_dist = False) -> bool:
+        """
+        Determine whether the sun is being eclipsed by the Earth using a computationally light
+        heuristic, as well as whether this heuristic is likely to be accurate. Assumes that the Earth
+        is closer than the sun to the satellite.
+        
+        Arguments:
+
+            sun_vector:
+                3D sun position vector in arbitrary Cartesian coordinate system.
+
+            earth_vector:
+                Earth position vector in arbitrary Cartesian coordinate system.
+
+            earth_radius:
+                Radius of the Earth [m].
+
+            recalc_equiangular_dist:
+                Boolean value which is True when equiangular_dist is to be recalculated in the function.
+
+        Returns: 
+            Tuple (sun_is_eclipsed, heuristic_accuracy) where:
+                sun_is_eclipsed: Boolean value which is True when the sun is being eclipsed.
+                heuristic_accuracy: Boolean value which is True when confidence in the heuristic is high.
+                    Becomes False when the satellite meets the cylindrical shadow-based heuristic
+                    but is outside of the Earth's shadow cone.
+        """
+        sun_vector = np.asarray(sun_vector, dtype=float)
+        earth_vector = np.asarray(earth_vector, dtype=float)
+        
+        if sun_vector.shape != (3,) or earth_vector.shape != (3,):
+            raise ValueError("sun_vector and earth_vector must both be 3D vectors.")
+        
+        earth_to_sun_vector = sun_vector - earth_vector
+
+        # equiangular_dist is the distance outward from Earth [m] at which the sun and Earth have equal angular sizes:
+        equiangular_dist = 1.384194765 * (10 ** 9) # equiangular_dist when Earth is 1 AU from sun
+        if recalc_equiangular_dist: 
+            earth_sun_dist = np.linalg.norm(earth_to_sun_vector)
+            equiangular_dist = (earth_radius * earth_sun_dist) / (const.SUN_RADIUS_m - earth_radius)
+
+        # Returns magnitude of earth_vector's projection onto the plane normal to earth_to_sun_vector: 
+        earth_projection = gc.planar_projection(earth_vector, earth_to_sun_vector)
+        proj_magnitude_perpend = np.linalg.norm(earth_projection)
+
+        sun_dot_earth = np.dot(sun_vector, earth_vector)
+
+        if proj_magnitude_perpend < earth_radius and sun_dot_earth > 0:
+            # Returns magnitude of earth_vector's projection onto earth_to_sun_vector: 
+            earth_sun_line_projection = gc.project_vector(earth_vector, earth_to_sun_vector)
+            proj_magnitude_parallel = np.linalg.norm(earth_sun_line_projection)
+
+            if proj_magnitude_parallel > equiangular_dist: # The heuristic is likely to be inaccurate past equiangular_dist
+                heuristic_accuracy = False
+            else: # If the satellite is outside of the Earth's shadow cone (approximated below), confidence in the heuristic is low
+                temp = (equiangular_dist - proj_magnitude_parallel) * earth_radius / equiangular_dist
+                heuristic_accuracy = (proj_magnitude_perpend < temp)
+            return (True, bool(heuristic_accuracy))
+        return (False, True) # The heuristic is essentially always accurate when returning sun_is_eclipsed == False
+
+    @staticmethod
+    def eval_eclipse_fine(sun_vector: np.ndarray, body_vector: np.ndarray, body_radius: float) -> float:
+        """
+        Determine the extent to which the sun is being eclipsed by another body of a given radius
+        in the satellite's reference frame. Assumes that such a body is closer than the sun
+        to the satellite.
+
+        Arguments:
+
+            sun_vector:
+                3D sun position vector in arbitrary Cartesian coordinate system.
+
+            body_vector:
+                3D eclipsing body position vector in arbitrary Cartesian coordinate system.
+
+            body_radius:
+                Radius of eclipsing body.
+
+        Returns: Float value ranging from 0.0 (full eclipse) to 1.0 (sun fully visible) representing the 
+        approximate fraction of sun visible to a satellite positioned at the origin. This fraction 
+        is calculated by determining the angular distance across the sun (relative to the plane 
+        defined by the origin, the sun, and the given body) covered by the body in question.
+        """
+
+        sun_vector = np.asarray(sun_vector, dtype=float)
+        body_vector = np.asarray(body_vector, dtype=float)
+
+        if sun_vector.shape != (3,) or body_vector.shape != (3,):
+            raise ValueError("sun_vector and body_vector must both be 3D vectors.")
+
+        plane_normal = np.cross(sun_vector, body_vector)
+        if np.allclose(plane_normal, np.zeros(3)): # Addresses case where body is directly in front of sun
+            if np.allclose(sun_vector / np.linalg.norm(sun_vector), np.array([1,0,0])):
+                plane_normal = np.cross(sun_vector, np.array([0,1,0]))
+            else:
+                plane_normal = np.cross(sun_vector, np.array([1,0,0]))
+                
+        # Returns 2D coordinates of the body vector projected onto a plane defined by the sun_vector and itself:
+        body_pos_vect_planar = gc.to_planar_vector(sun_vector, body_vector)
+
+        # Determines the two 2D vectors tangent to the circle representing the body considered within the defined planar coordinate system:
+        body_tangent_vects_planar = gc.determine_circle_tangent_vectors(body_pos_vect_planar, body_radius)
+
+        # Provides 2D coordinates of the sun in the used planar coordinate system:
+        sun_pos_vect_planar = np.array([1,0]) * np.linalg.norm(sun_vector)
+        
+        # Determines the two 2D vectors tangent to the circle representing the sun within the defined planar coordinate system:
+        sun_tangent_vects_planar = gc.determine_circle_tangent_vectors(sun_pos_vect_planar, const.SUN_RADIUS_m)
+
+        # Calculate angles between the pairs of tangent vectors:
+        angle_between_body_tangents = gc.angle_between_vectors(*body_tangent_vects_planar)
+        angle_between_sun_tangents = gc.angle_between_vectors(*sun_tangent_vects_planar)
+
+        # Casework to determine fraction of sun visible:
+        if gc.eval_vector_between_vectors(sun_pos_vect_planar, *body_tangent_vects_planar):
+            # Sun fully blocked by body:
+            if gc.eval_vector_between_vectors(sun_tangent_vects_planar[0], *body_tangent_vects_planar) and gc.eval_vector_between_vectors(sun_tangent_vects_planar[1], *body_tangent_vects_planar):
+                return 0.0
+            # Body eclipsing sun in annular fashion (intersecting sun position vector):
+            if (not gc.eval_vector_between_vectors(sun_tangent_vects_planar[0], *body_tangent_vects_planar)) and (not gc.eval_vector_between_vectors(sun_tangent_vects_planar[1], *body_tangent_vects_planar)):
+                return (angle_between_sun_tangents - angle_between_body_tangents) / angle_between_sun_tangents
+            # Body covering over half of sun disk:
+            min_angle = min(gc.angle_between_vectors(sun_pos_vect_planar, body_tangent_vects_planar[0]), gc.angle_between_vectors(sun_pos_vect_planar, body_tangent_vects_planar[1]))
+            return (angle_between_sun_tangents / 2 - min_angle) / angle_between_sun_tangents
+
+        if gc.eval_vector_between_vectors(sun_tangent_vects_planar[0], *body_tangent_vects_planar) or gc.eval_vector_between_vectors(sun_tangent_vects_planar[1], *body_tangent_vects_planar):
+            # Body covering less than half of sun disk:
+            min_angle = min(gc.angle_between_vectors(sun_pos_vect_planar, body_tangent_vects_planar[0]), gc.angle_between_vectors(sun_pos_vect_planar, body_tangent_vects_planar[1]))
+            return (angle_between_sun_tangents / 2 + min_angle) / angle_between_sun_tangents
+
+        if gc.eval_vector_between_vectors(body_pos_vect_planar, *sun_tangent_vects_planar):
+            # Body eclipsing sun in annular fashion (not intersecting sun position vector):
+            return (angle_between_sun_tangents - angle_between_body_tangents) / angle_between_sun_tangents
+
+        # Sun fully visible:
+        return 1.0
 
     def add_sensor(self, id: str, model: str, dcm: np.ndarray):
         cfg_file_path = self._find_config_path(model)
