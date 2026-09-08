@@ -341,19 +341,37 @@ def rotmat_to_quat(rotmat: np.ndarray) -> np.ndarray:
         raise ValueError("rotmat must be a rotation matrix of shape (3, 3).")
 
     trace = np.linalg.trace(rotmat)
-    w = 0.5 * math.sqrt(1 + trace)
-    abs_x = 0.5 * math.sqrt(1 + rotmat[0][0] - rotmat[1][1] - rotmat[2][2])
-    abs_y = 0.5 * math.sqrt(1 - rotmat[0][0] + rotmat[1][1] - rotmat[2][2])
-    abs_z = 0.5 * math.sqrt(1 - rotmat[0][0] - rotmat[1][1] + rotmat[2][2])
-
-    q = np.array([
-        abs_x * np.sign(rotmat[2][1] - rotmat[1][2]),
-        abs_y * np.sign(rotmat[0][2] - rotmat[2][0]),
-        abs_z * np.sign(rotmat[1][0] - rotmat[0][1]),
-        w
-    ])
-
-    return q
+    if trace > 0:
+        r = math.sqrt(1 + trace)
+        s = 0.5 / r
+        w = 0.5 * r
+        x = (rotmat[2][1] - rotmat[1][2]) * s
+        y = (rotmat[0][2] - rotmat[2][0]) * s
+        z = (rotmat[1][0] - rotmat[0][1]) * s
+    else:
+        if rotmat[0][0] > rotmat[1][1] and rotmat[0][0] > rotmat[2][2]:
+            r = math.sqrt(1 + rotmat[0][0] - rotmat[1][1] - rotmat[2][2])
+            s = 0.5 / r
+            x = 0.5 * r
+            w = (rotmat[2][1] - rotmat[1][2]) * s
+            z = (rotmat[0][2] + rotmat[2][0]) * s
+            y = (rotmat[1][0] + rotmat[0][1]) * s
+        elif rotmat[1][1] > rotmat[0][0] and rotmat[1][1] > rotmat[2][2]:
+            r = math.sqrt(1 - rotmat[0][0] + rotmat[1][1] - rotmat[2][2])
+            s = 0.5 / r
+            y = 0.5 * r
+            z = (rotmat[2][1] + rotmat[1][2]) * s
+            w = (rotmat[0][2] - rotmat[2][0]) * s
+            x = (rotmat[1][0] + rotmat[0][1]) * s
+        else:
+            r = math.sqrt(1 - rotmat[0][0] - rotmat[1][1] + rotmat[2][2])
+            s = 0.5 / r
+            z = 0.5 * r
+            y = (rotmat[2][1] + rotmat[1][2]) * s
+            x = (rotmat[0][2] + rotmat[2][0]) * s
+            w = (rotmat[1][0] - rotmat[0][1]) * s
+        
+    return np.array([x, y, z, w])
 
 def rot_x(theta_rad: float) -> np.ndarray:
     """

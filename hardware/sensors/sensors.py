@@ -6,6 +6,7 @@ import numpy as np
 from abc import ABC, abstractmethod
 
 import math
+from utils import conversions as conv,  geometric_calculations as gc, quaternion_math as quat
 
 class VirtualSensor(ABC):
     def __init__(self, cfg_file: Path):
@@ -37,11 +38,11 @@ class VirtualFSS(VirtualSensor):
 
     def __init__(self, cfg_file: Path):
         self.model: str = "Generic FSS"  # Model name
-        self.fov_deg: float = 0.0  # Half-cone field of view [deg]
+        self.fov_deg: float = 0.0 # Half-cone field of view [deg]
         self.rate_hz: float = 0.0  # Data rate [Hz]
         self.cov_deg2: np.ndarray = np.zeros((2, 2), dtype=float)  # Measurement covariance (2x2) [deg^2]
         self._load_cfg(cfg_file)
- 
+
     def _load_cfg(self, cfg_file: Path):
         """
         Populate FSS parameters using a configuration file.
@@ -52,11 +53,17 @@ class VirtualFSS(VirtualSensor):
         Returns:
         None
         """
-        # TODO: Config file format
-        with open(cfg_file, 'r') as f:
-            raise NotImplementedError()
+        cfg_file = Path(cfg_file)
+        if not cfg_file.exists():
+            raise FileNotFoundError(f"STR config file not found: {cfg_file}")
+        with open(cfg_file, "r") as f:
+            cfg = json.load(f)
+        self.model = str(cfg.get("model", self.model))
+        self.fov_deg = float(cfg["fov_hcone_deg"])
+        self.rate_hz = float(cfg["rate_hz"])
+        self.cov_deg2 = np.asarray(cfg["cov_deg2"], dtype=float)
 
-    def _angle_computation(self, incident_light_sensor: np.ndarray):
+    def _angle_computation(self, incident_light_sensor: np.ndarray) -> tuple:
         """
         Compute FSS angular output from an incident light vector in sensor frame.
 
@@ -74,21 +81,13 @@ class VirtualFSS(VirtualSensor):
                 3D incident light direction vector expressed in sensor frame.
 
         Returns:
-            dict with:
+            Tuple (alpha_deg, beta_deg) where:
                 alpha_deg: signed x-z plane angle [deg]
                 beta_deg: signed y-z plane angle [deg]
-                sun_present: True if light is inside FOV
         """
         incident_light_sensor = np.asarray(incident_light_sensor, dtype=float)
-        if incident_light_sensor.shape != (3,):
-            raise ValueError("incident_light_sensor must be a 3D vector.")
-
-        if np.linalg.norm(incident_light_sensor) == 0:
-            return {
-                "alpha_deg": 0,
-                "beta_deg": 0,
-                "sun_present": False,
-            }
+        if incident_light_sensor.shape != (3,) or np.linalg.norm(incident_light_sensor) == 0.0:
+            raise ValueError("incident_light_sensor must be a nonzero 3D vector.")
 
         alpha_rad = np.arctan2(incident_light_sensor[0], incident_light_sensor[2])
         beta_rad = np.arctan2(incident_light_sensor[1], incident_light_sensor[2])
@@ -96,69 +95,154 @@ class VirtualFSS(VirtualSensor):
         alpha_deg = np.rad2deg(alpha_rad)
         beta_deg = np.rad2deg(beta_rad)
 
-        inside_fov = (
-                abs(alpha_deg) <= self.fov_deg
-                and abs(beta_deg) <= self.fov_deg
-                and incident_light_sensor[2] > 0.0
-        )
-
         noise = np.random.multivariate_normal(mean=np.zeros(2), cov=self.cov_deg2)
-        # TODO: self.cov_deg2 must follow the same ordering as the measurement vector:
-        #       [alpha_deg, beta_deg].
-        #       cov_deg2[0, 0] is Var(alpha), cov_deg2[1, 1] is Var(beta),
-        #       and cov_deg2[0, 1] / cov_deg2[1, 0] is Cov(alpha, beta).
         alpha_noise = noise[0]
         beta_noise = noise[1]
 
         alpha_deg += alpha_noise
         beta_deg += beta_noise
 
-        return {
-            "alpha_deg": alpha_deg,
-            "beta_deg": beta_deg,
-            "sun_present": inside_fov,
-        }
-
-    def measure(self, sun_vec_body, R_BS, r_mount=None):
+        return (alpha_deg, beta_deg)
+    
+    def _angle_computation_general(self, sun_vector: np.ndarray, alpha_vector: np.ndarray, beta_vector: np.ndarray) -> tuple:
         """
-        Compute FSS angular output from Sun and satellite position vectors.
+        Compute FSS angular output from given sun_vector in any arbitrary 
+        coordinate system (defined by alpha_vector and beta_vector).
 
-        This method assumes:
-            incident_light = sun_pos - r_mount (optional)
+        Note: boresight_vector = alpha_vector x beta_vector is the direction vector of the FSS boresight.
 
-        Then the sensor mounting matrix is applied:
-            I_s = R_BS @ I_b
+        Arguments:
+            sun_vector:
+                3D sun direction vector.
+
+            alpha_vector:
+                3D direction vector indicating the direction of positive alpha angles.
+
+            beta_vector:
+                3D direction vector indicating the direction of positive beta angles.
+
+        Returns:
+            Tuple (alpha_deg, beta_deg) where:
+                alpha_deg: signed angle between projection of sun_vector onto beta plane and boresight_vector [deg]
+                beta_deg: signed angle between projection of sun_vector onto alpha plane and boresight_vector [deg]
+        """
+        if round(np.dot(alpha_vector, beta_vector), 10) != 0.0:
+            raise ValueError("Direction vectors for positive alpha and positive beta should be perpendicular.")
+        
+        boresight_vector = np.cross(alpha_vector, beta_vector)
+        proj_sun_alpha = gc.planar_projection(sun_vector, beta_vector)
+        proj_sun_beta = gc.planar_projection(sun_vector, alpha_vector)
+
+        alpha_rad = 0.0
+        beta_rad = 0.0
+        
+        if not np.allclose(proj_sun_alpha, np.zeros(3)):
+            alpha_rad = gc.angle_between_vectors(boresight_vector, proj_sun_alpha)
+        
+        if not np.allclose(proj_sun_beta, np.zeros(3)):
+            beta_rad = gc.angle_between_vectors(boresight_vector, proj_sun_beta)
+
+        if np.dot(alpha_vector, proj_sun_alpha) < 0:
+            alpha_rad *= -1
+
+        if np.dot(beta_vector, proj_sun_beta) < 0:
+            beta_rad *= -1
+
+        alpha_deg = np.rad2deg(alpha_rad)
+        beta_deg = np.rad2deg(beta_rad)
+
+        noise = np.random.multivariate_normal(mean=np.zeros(2), cov=self.cov_deg2)
+        alpha_noise = noise[0]
+        beta_noise = noise[1]
+
+        alpha_deg += alpha_noise
+        beta_deg += beta_noise
+        return (alpha_deg, beta_deg)
+
+    def measure(self, attitude_quat: np.ndarray, sun_vector: np.ndarray, sun_visibility: float, 
+                offset_rotmat: np.ndarray = np.identity(3)) -> dict:
+        """
+        Compute FSS angular output from coordinate transformation quaternions as well as sun, alpha, and beta vectors.
+        The sun vector provided should be in a satellite-fixed non-rotating reference frame, with attitude_quat transforming 
+        between this frame and a frame rotating with the satellite (where the unit vector [1, 0, 0] 
+        maps to the direction of the STR's boresight). Rotation matrix offset_rotmat then transforms between this
+        coordinate system to an FSS-specific system in the same frame of reference (where the unit vectors [0, 1, 0] 
+        and [0, 0, 1] map to the direction of the FSS's alpha and beta axes respectively by default).
 
         Arguments:
 
-            :param sun_vec_body:
-                3D Sun position vector in the body frame.
+            attitude_quat: 
+                Attitude unit quaternion [x, y, z, w] representing the satellite's current orientation.
+            
+            sun_vector:
+                3D sun position vector.
 
-            :param R_BS:
-                External mounting matrix turns from body frame to sensor frame
+            sun_visibility:
+                Float between 0.0 (full eclipse) to 1.0 (sun fully visible) representing the 
+                approximate fraction of sun visible to a satellite positioned at the origin.
+                Boolean input can also be used.
 
-            :param r_mount: mounting position, usually negligible.
+            offset_rotmat:
+                Rotation matrix transforming from general rotating satellite coordinate system
+                to FSS-specific system.
 
         Returns:
-            Same dict as measure_from_sensor_vector.
+            Dictionary containing {
+                "alpha_deg" : signed angle between projection of sun_vector onto beta plane and boresight_vector [deg]
+                "beta_deg" : signed angle between projection of sun_vector onto alpha plane and boresight_vector [deg]
+                "sun_present" : True if sun is inside FOV and not in eclipse.
+            }
         """
-        if r_mount is None:
-            r_mount = np.zeros(3)
-        else:
-            r_mount = np.asarray(r_mount, dtype=float)
+        attitude_quat = np.asarray(attitude_quat, dtype=float)
+        sun_vector = np.asarray(sun_vector, dtype=float)
+        offset_rotmat = np.asarray(offset_rotmat, dtype=float)
 
-        sun_vec_body = np.asarray(sun_vec_body, dtype=float)
-        if sun_vec_body.shape != (3,) or r_mount.shape != (3,):
-            raise ValueError("sun_pos and r_mount must both be 3D vectors.")
+        if attitude_quat.shape != (4,) or round(np.linalg.norm(attitude_quat), 8) != 1.0:
+            raise ValueError("attitude_quat must be a quaternion with unit norm.")
+        
+        if sun_vector.shape != (3,) or np.linalg.norm(sun_vector) == 0.0:
+            raise ValueError("sun_vector must be a nonzero 3D vector.")
+        
+        if offset_rotmat.shape != (3, 3) or round(np.linalg.norm(offset_rotmat, ord=2), 5) != 1.0:
+            raise ValueError("offset_rotmat must be a rotation matrix of shape (3, 3).")
 
-        R_BS = np.asarray(R_BS, dtype=float)
-        if R_BS.shape != (3, 3):
-            raise ValueError("R_BS must be a 3x3 matrix.")
+        offset_quat = conv.rotmat_to_quat(offset_rotmat)
 
-        incident_light_body = sun_vec_body - r_mount
-        incident_light_sensor = R_BS @ incident_light_body
+        # Default reference axes in FSS coordinate system, which can be changed if desired:
+        alpha_vector = np.array([0,1,0])
+        beta_vector = np.array([0,0,1])
 
-        return self._angle_computation(incident_light_sensor)
+        no_sun_dict = {
+            "alpha_deg": 0.0,
+            "beta_deg": 0.0,
+            "sun_present": False,
+        }
+
+        sun_tolerance = 0.9 # Use more relevant value once known
+
+        if sun_visibility < sun_tolerance:
+            return no_sun_dict
+
+        transformation_quat = quat.quat_multiply(attitude_quat, offset_quat)
+
+        FSS_frame_sun_vector = quat.transform_vect_coord_system(sun_vector, transformation_quat)
+        
+        ab_angles_deg = self._angle_computation_general(FSS_frame_sun_vector, alpha_vector, beta_vector)
+
+        inside_fov = (
+            abs(ab_angles_deg[0]) <= self.fov_deg
+            and abs(ab_angles_deg[1]) <= self.fov_deg
+            and np.dot(np.cross(alpha_vector, beta_vector), FSS_frame_sun_vector) >= 0
+        )
+
+        if not inside_fov:
+            return no_sun_dict
+
+        return {
+            "alpha_deg": ab_angles_deg[0],
+            "beta_deg": ab_angles_deg[1],
+            "sun_present": True,
+        }
 
 class VirtualSTR(VirtualSensor):
     """
