@@ -62,19 +62,19 @@ def examine_sp3_data(J2bool, dragbool):
     config = simulation_config(
         t0=t0,
         tf=tf,
-        time_steps=duration*steps_per_min,
+        time_steps=duration*steps_per_min+1,
         propagator_method="cowell",
         x0=x0,
         drag=dragbool,
         J2=J2bool
     )
 
-    times = np.linspace(1/steps_per_min, duration, duration * steps_per_min)
+    times = np.linspace(0, duration, duration * steps_per_min + 1) 
 
     raw_states = propagate_orbit(config)
     propagated_pos_data = np.transpose(raw_states[:3, :])
 
-    true_pos_ecef = true_position_arr[:(duration*steps_per_min), :] #[1:] before
+    true_pos_ecef = true_position_arr[:duration*steps_per_min + 1, :]
 
     true_pos_eci = []
     for true_pos_ind in range(len(true_pos_ecef)):
@@ -90,7 +90,7 @@ def examine_sp3_data(J2bool, dragbool):
 
     return times, normed_diffs, alt_diffs
 
-# print(examine_sp3_data(False, False))
+# print(examine_sp3_data(True, False))
 # Fields in CASSIOPE SP3 Data:
 
 # MultiIndex([(  'EST',           'X'),
