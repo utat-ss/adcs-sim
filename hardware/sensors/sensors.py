@@ -7,10 +7,10 @@ from abc import ABC, abstractmethod
 from utils.conversions import quat_to_rotmat
 
 import math
-from ...utils import geometric_calculations as gc
-from ...utils import quaternion_math as quat
-from ...utils import conversions as conv
-from ... import constants as const
+from utils import geometric_calculations as gc
+from utils import quaternion_math as quat
+from utils import conversions as conv
+import constants as const
 
 class VirtualSensor(ABC):
     def __init__(self, cfg_file: Path):
