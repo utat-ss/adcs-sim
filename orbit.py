@@ -2,7 +2,10 @@
 
 from pydantic import BaseModel, field_validator, model_validator, ValidationInfo
 import numpy as np
-from constants import G, M, mu
+from constants import (
+    G, M, mu,
+    EARTH_MU_m3_s2, EARTH_RADIUS_m, EARTH_J2, EARTH_OMEGA_rad_s
+)
 from collections.abc import Callable
 from root_finding import *
 
