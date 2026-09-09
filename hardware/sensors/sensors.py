@@ -4,7 +4,7 @@ from pathlib import Path
 import json
 import numpy as np
 from abc import ABC, abstractmethod
-from utils.conversions import quatToRotationMatrix
+from utils.conversions import quat_to_rotmat
 
 import math
 from ...utils import geometric_calculations as gc
@@ -613,7 +613,7 @@ class VirtualMTM(VirtualSensor):
         """
 
         #ECI to body frame
-        R_BE = quatToRotationMatrix(quat)
+        R_BE = quat_to_rotmat(quat)
         
         B_ECI = np.asarray(B_ECI, dtype = float)
         if B_ECI.shape!= (3,):
