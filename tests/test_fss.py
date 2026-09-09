@@ -7,6 +7,9 @@ import pytest
 import numpy as np
 from hardware.sensors.sensors import VirtualFSS
 
+IDENTITY_QUAT = np.array([0.0, 0.0, 0.0, 1.0])
+IDENTITY_ROTMAT = np.identity(3)
+
 @pytest.fixture
 
 def mock_fss():
@@ -19,11 +22,11 @@ def mock_fss():
 
     return fss
 
-def test_sun_vector_fov(mock_fss):
-    sun_vector = np.array([1.0, 0.0, 1.0])
-    matrix = np.identity(3)
 
-    output = mock_fss.measure(sun_vector, matrix)
+def test_sun_vector_fov(mock_fss):
+    sun_vector = np.array([1.0, 1.0, 0.0])
+
+    output = mock_fss.measure(IDENTITY_QUAT, sun_vector, sun_visibility=1.0, offset_rotmat=IDENTITY_ROTMAT)
 
     assert output["sun_present"] == True
     assert output["alpha_deg"] == pytest.approx(45.0)
@@ -31,35 +34,42 @@ def test_sun_vector_fov(mock_fss):
 
 
 def test_sun_vector_out_of_fov(mock_fss):
-    sun_vector = np.array([2.0, 0.0, 1.0])
-    matrix = np.identity(3)
+    sun_vector = np.array([1.0, 2.0, 0.0]) # alpha = 63.43 deg, beta = 0.0 deg
 
-    output = mock_fss.measure(sun_vector, matrix)
-
-    assert output["sun_present"] == False
-    assert output["alpha_deg"] == pytest.approx(63.43, abs = 0.5)
-    assert output["beta_deg"] == pytest.approx(0.0, abs = 0.5)
-
-def test_eclipse_vector(mock_fss):
-    sun_vector = np.array([0.0, 0.0, 0.0])
-    matrix = np.identity(3)
-
-    output = mock_fss.measure(sun_vector, matrix)
+    output = mock_fss.measure(IDENTITY_QUAT, sun_vector, sun_visibility=1.0, offset_rotmat=IDENTITY_ROTMAT)
 
     assert output["sun_present"] == False
     assert output["alpha_deg"] == pytest.approx(0.0)
     assert output["beta_deg"] == pytest.approx(0.0)
 
+
+def test_eclipse_vector(mock_fss):
+    sun_vector = np.array([1.0, 0.0, 0.0])
+
+    output = mock_fss.measure(IDENTITY_QUAT, sun_vector, sun_visibility=0.5, offset_rotmat=IDENTITY_ROTMAT)
+
+    assert output["sun_present"] == False
+    assert output["alpha_deg"] == pytest.approx(0.0)
+    assert output["beta_deg"] == pytest.approx(0.0)
+
+def test_eclipse_vector_never_reports_sun_even_when_geometrically_in_fov(mock_fss):
+    sun_vector = np.array([1.0, 0.0, 0.0])
+ 
+    for visibility in [0.0, 0.1, 0.5, 0.89]:
+        output = mock_fss.measure(IDENTITY_QUAT, sun_vector, sun_visibility=visibility, offset_rotmat=IDENTITY_ROTMAT)
+        assert output["sun_present"] == False
+
+
 def test_statistically_consistent_noise(mock_fss):
-    sun_vector = np.array([0.0, 0.0, 1.0])
-    matrix = np.identity(3)
-    
+    mock_fss.cov_deg2 = np.array([[0.01, 0.0], [0.0, 0.01]])
+    sun_vector = np.array([1.0, 0.0, 0.0])
+
     num_samples = 1000
     alpha_samples = []
     beta_samples = []
 
     for _ in range(num_samples):
-        output = mock_fss.measure(sun_vector, matrix)
+        output = mock_fss.measure(IDENTITY_QUAT, sun_vector, sun_visibility=1.0, offset_rotmat=IDENTITY_ROTMAT)
         alpha_samples.append(output["alpha_deg"])
         beta_samples.append(output["beta_deg"])
 
@@ -71,6 +81,11 @@ def test_statistically_consistent_noise(mock_fss):
 
     assert calculated_stdev_alpha == pytest.approx(true_stdev_alpha, abs = 0.05)
     assert calculated_stdev_beta == pytest.approx(true_stdev_beta, abs = 0.05)
+
+    within_1_std_alpha = np.mean(np.abs(alpha_samples) <= true_stdev_alpha)
+    within_1_std_beta = np.mean(np.abs(beta_samples) <= true_stdev_beta)
+    assert within_1_std_alpha == pytest.approx(0.68, abs=0.05)
+    assert within_1_std_beta == pytest.approx(0.68, abs=0.05)
 
 def test_fss_digitization_precision():
     """
