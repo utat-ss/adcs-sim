@@ -24,12 +24,12 @@ def mock_fss():
 
 
 def test_sun_vector_fov(mock_fss):
-    sun_vector = np.array([1.0, 1.0, 0.0])
+    sun_vector = np.array([1.0, 0.5, 0.0]) # alpha = 26.565 deg, beta = 0.0 deg
 
     output = mock_fss.measure(IDENTITY_QUAT, sun_vector, sun_visibility=1.0, offset_rotmat=IDENTITY_ROTMAT)
 
     assert output["sun_present"] == True
-    assert output["alpha_deg"] == pytest.approx(45.0)
+    assert output["alpha_deg"] == pytest.approx(26.565, abs=0.01)
     assert output["beta_deg"] == pytest.approx(0.0)
 
 
