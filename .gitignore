@@ -30,7 +30,10 @@ codegen/
 *.slxc
 __pycache__/
 .pytest_cache/
+<<<<<<< HEAD
+=======
 *.egg*
+>>>>>>> virtual-sensors
 
 # Cloud based storage dotfile
 .MATLABDriveTag
