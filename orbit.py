@@ -2,9 +2,37 @@
 
 from pydantic import BaseModel, field_validator, model_validator, ValidationInfo
 import numpy as np
-from constants import G, M, mu
+from constants import G_m3_kgs2, M_kg, EARTH_MU_m3_s2
 from collections.abc import Callable
-from root_finding import *
+from datetime import datetime, timezone, timedelta
+from scipy.integrate import solve_ivp
+import environment as env
+
+G = G_m3_kgs2
+M = M_kg
+mu = EARTH_MU_m3_s2
+e = np.e
+
+class simulation_config():
+    """
+    Configuration for the simulation.
+    """
+    t0: datetime # Simulation start time (UTC)
+    tf: datetime # Simulation end time (UTC)
+    time_steps: int = 1000         # Number of time steps
+    propagator_method: str = "cowell"  # Propagator to use: "cowell", "encke", or "sgp4"
+    x0: np.ndarray = np.array([0., 0., 0., 0., 0., 0.]) # Initial state vector (6x1) (must be in ECI (for now))
+    drag: bool = False # Whether to include drag in the simulation
+    J2: bool = False # Whether to include J2 perturbation in the simulation
+    
+    def __init__(self, t0: datetime, tf: datetime, time_steps: int = 1000, propagator_method: str = "cowell", x0: np.ndarray = np.array([0., 0., 0., 0., 0., 0.]), drag: bool = False, J2: bool = False):
+        self.t0 = t0
+        self.tf = tf
+        self.time_steps = time_steps
+        self.propagator_method = propagator_method
+        self.x0 = x0
+        self.drag = drag
+        self.J2 = J2
 
 class KeplerianElements(BaseModel):
     """
@@ -387,7 +415,7 @@ def cartesian2keplerian(x: np.ndarray, mu_km3_s2: float) -> tuple[KeplerianEleme
     Convert a cartesian state vector to Keplerian elements with true anomaly.
 
     Arguments:
-    x:                  [np.ndarray] (6x1) Orbital state vector in cartesian inertial frame.
+    x:                  [np.ndarray] (6x1) Orbital state vector in cartesian inertial frame in km.
     mu_km3_s2:          [float] Gravitational parameter of the primary body.
 
     Returns:
@@ -510,13 +538,14 @@ def mee_motion(me: ModifiedEquinoctialElements, L_rad: float, p_rsw_m2_s2: np.nd
     return medot
 
 
-def cowell_motion(x: np.ndarray, p_m_s2: np.ndarray) -> np.ndarray:
+def cowell_motion(x: np.ndarray, add_drag: bool, add_J2: bool) -> np.ndarray:
     """
     Calculate the orbital motion of a Cartesian state using Cowell's method.
 
     Arguments:
-    x:      (np.ndarray) (6,) Orbital state vector. (x, y, z, v_x, v_y, v_z)
-    p_m_s2 (np.ndarray) (3,) Perturbing accelerations.
+    x:      (np.ndarray) (6,) Orbital state vector. (x, y, z, v_x, v_y, v_z) in meters
+    add_drag:   (bool) Whether to include atmospheric drag.
+    add_J2:     (bool) Whether to include J2 perturbation.
 
     Returns:
     xdot:   (np.ndarray) (6,) Orbit motion.
@@ -525,13 +554,21 @@ def cowell_motion(x: np.ndarray, p_m_s2: np.ndarray) -> np.ndarray:
 
     r_vec = x[0:3] # is shape (3,)
     r_mag = np.linalg.norm(r_vec) # magnitude of r vector
+    p_m_s2 = np.array([0., 0., 0.]) # initialize perturbing acceleration vector
+    if add_J2:
+        p_m_s2 += env.j2_acceleration_m_s2(r_vec)
+    if add_drag:
+        air_velocity_eci_m_s = env.calc_atm_velocity_m_s(r_vec, np.array([0,0,7.292115*10**(-5)])) # should be replaced with more accurate, varying angular velocity value later
+        air_density = env.approximate_atmospheric_density_kg_m3(r_vec) 
+        p_m_s2 += env.aerodynamic_drag_perturbation_m_s2(dr, air_velocity_eci_m_s, air_density, drag_coeff=2.2, area_m_2=0.03, mass_kg=5.0) # may wanna include the parameters used to include drag in our satellite configuration file
 
-    dv = ( -mu*r_vec/(r_mag)**3 ) + p_m_s2
+    dv = (-mu*r_vec/(r_mag)**3)+p_m_s2
     
     xdot = np.concatenate((dr, dv))  # is shape (6,)
     return xdot
 
-def encke_motion(t: float, state: list[np.ndarray], p_m_s2: np.ndarray):
+
+def encke_motion(t: float, x_ref: np.ndarray, delta_x: np.ndarray, add_drag: bool, add_J2: bool) -> np.ndarray:
     """
     Calculate the orbital motion of a Cartesian state using Encke's method.
 
@@ -544,31 +581,290 @@ def encke_motion(t: float, state: list[np.ndarray], p_m_s2: np.ndarray):
     Returns:
     xdot:   (np.ndarray) (6,)  (delta_r, delta_r_dot) (deviation's derivative).
     """
+    r_ref = x_ref[0:3]
+    v_ref = x_ref[3:6]
+    r_mag = np.linalg.norm(r_ref) # magnitude of r vector
 
-    x = state[0:5]
-    r = state[6:11]
-    r_vec = r[0:3]
-    r_mag = np.linalg.norm(r_vec) # magnitude of r vector
+    delta_r_dot = delta_x[3:6] # (3,)
 
-    kep = cartesian2keplerian(r, mu) # for now assume we are only doing encke motion for orbit around Earth
-    r_osc = kepler_motion(kep, t) # r_osc is distance from center of primary body to the spacecraft along the osculating (unperturbed) orbit
+    delta_r = delta_x[0:3] # (3,)
 
-    delta_r_dot = x[3:6] # (3,)
-
-    delta_r = x[0:3] # (3,)
-
-    a = -mu/r_osc**3 # (1, )
-    b = 2*r_vec - delta_r  # (3, )
-    c = np.dot(delta_r, b) # (1, )
-    d = c / (r_mag**2) # (1, )
-    e = 1 - d**(3/2) # (1,)
-    f = e*r_vec # (3, )
+    q = np.dot(delta_r, (delta_r+2*r_ref)/np.linalg.norm(r_ref)**2)
+    fq = q*((q**2+3*q+3)/((1+q)**1.5+1))
+    a = -mu/r_mag**3*(delta_r-fq*(r_ref+delta_r))
     
-    delta_r_dot_dot = a*(delta_r - f) + p_m_s2
+    p_m_s2 = np.array([0., 0., 0.]) # initialize perturbing acceleration vector
+    if add_J2:
+        p_m_s2 += env.j2_acceleration_m_s2(r_ref+delta_r)
+    if add_drag:
+        air_velocity_eci_m_s = env.calc_atm_velocity_m_s(r_ref+delta_r, np.array([0,0,7.292115*10**(-5)])) # should be replaced with more accurate, varying angular velocity value later
+        air_density = env.approximate_atmospheric_density_kg_m3(r_ref+delta_r)
+        p_m_s2 += env.aerodynamic_drag_perturbation_m_s2(v_ref, air_velocity_eci_m_s, air_density, drag_coeff=2.2, area_m_2=0.03, mass_kg=5.0) #  may wanna include the parameters used to include drag in our satellite configuration file
+    
+    delta_r_dot_dot = a + p_m_s2
 
     xdot = np.concatenate((delta_r_dot, delta_r_dot_dot)) # (6,)
 
     return xdot
+
+def stumpff_C(z):
+    if z > 1e-8:
+        sz = np.sqrt(z)
+        return (1.0 - np.cos(sz)) / z
+
+    elif z < -1e-8:
+        sz = np.sqrt(-z)
+        return (np.cosh(sz) - 1.0) / (-z)
+
+    else:
+        return (
+            1.0 / 2.0
+            - z / 24.0
+            + z**2 / 720.0
+            - z**3 / 40320.0
+        )
+
+
+def stumpff_S(z):
+    if z > 1e-8:
+        sz = np.sqrt(z)
+        return (sz - np.sin(sz)) / sz**3
+
+    elif z < -1e-8:
+        sz = np.sqrt(-z)
+        return (np.sinh(sz) - sz) / sz**3
+
+    else:
+        return (
+            1.0 / 6.0
+            - z / 120.0
+            + z**2 / 5040.0
+            - z**3 / 362880.0
+        )
+
+
+def kepler_cartesian_motion(
+    x0_m,
+    t,
+    mu_m3_s2=mu,
+    tolerance=1e-7,
+    max_iter=100,
+):
+    """
+    Propagate a Cartesian state under unperturbed two-body motion.
+
+    Parameters
+    ----------
+    x0_m : np.ndarray, shape (6,)
+        [x, y, z, vx, vy, vz]
+        Position in m, velocity in m/s.
+
+    t : float
+        Time since initial state [s].
+
+    mu_m3_s2 : float
+        Gravitational parameter [m^3/s^2].
+
+    Returns
+    -------
+    x : np.ndarray, shape (6,)
+        Propagated Cartesian state [m, m/s].
+    """
+
+    x0_m = np.asarray(x0_m, dtype=float)
+
+    if x0_m.shape != (6,):
+        raise ValueError(
+            f"x0_m must have shape (6,), got {x0_m.shape}"
+        )
+
+    r0_vec = x0_m[:3]
+    v0_vec = x0_m[3:]
+
+    r0 = np.linalg.norm(r0_vec)
+    v0 = np.linalg.norm(v0_vec)
+
+    if r0 == 0:
+        raise ValueError("Initial position cannot be zero.")
+
+    if t == 0:
+        return x0_m.copy()
+
+    sqrt_mu = np.sqrt(mu_m3_s2)
+
+    # Initial radial velocity
+    vr0 = np.dot(r0_vec, v0_vec) / r0
+
+    # Reciprocal semi-major axis
+    alpha = (
+        2.0 / r0
+        - v0**2 / mu_m3_s2
+    )
+
+    # Initial guess for universal anomaly.
+    # This is especially appropriate for the elliptic Earth orbits
+    # being tested here.
+    if alpha > 1e-12:
+        chi = sqrt_mu * alpha * t
+    else:
+        chi = sqrt_mu * t / r0
+
+    # Solve universal Kepler equation
+    for _ in range(max_iter):
+
+        z = alpha * chi**2
+
+        C = stumpff_C(z)
+        S = stumpff_S(z)
+
+        F = (
+            (r0 * vr0 / sqrt_mu)
+            * chi**2
+            * C
+
+            + (1.0 - alpha * r0)
+            * chi**3
+            * S
+
+            + r0 * chi
+
+            - sqrt_mu * t
+        )
+
+        dF = (
+            (r0 * vr0 / sqrt_mu)
+            * chi
+            * (1.0 - z * S)
+
+            + (1.0 - alpha * r0)
+            * chi**2
+            * C
+
+            + r0
+        )
+
+        delta_chi = F / dF
+        chi -= delta_chi
+
+        if abs(delta_chi) < tolerance:
+            break
+
+    else:
+        raise RuntimeError(
+            "Universal-variable Kepler solver did not converge."
+        )
+
+    # Recalculate at converged chi
+    z = alpha * chi**2
+    C = stumpff_C(z)
+    S = stumpff_S(z)
+
+    # Lagrange f, g coefficients
+    f = 1.0 - chi**2 / r0 * C
+
+    g = (
+        t
+        - chi**3 / sqrt_mu * S
+    )
+
+    r_vec = (
+        f * r0_vec
+        + g * v0_vec
+    )
+
+    r = np.linalg.norm(r_vec)
+
+    # Lagrange f-dot, g-dot
+    f_dot = (
+        sqrt_mu
+        / (r * r0)
+        * (
+            alpha * chi**3 * S
+            - chi
+        )
+    )
+
+    g_dot = (
+        1.0
+        - chi**2 / r * C
+    )
+
+    v_vec = (
+        f_dot * r0_vec
+        + g_dot * v0_vec
+    )
+
+    return np.concatenate((r_vec, v_vec))
+
+
+def propagate_orbit(config: simulation_config):
+    """
+    Propagate an orbit from an initial state using the parameters given in config.
+
+    Arguments:
+    config:     (simulation_config) Configuration for the simulation.
+
+    Returns:
+    x:         (np.ndarray) (time_steps, 6) Array of orbital states at each time step.
+    """
+    if config.propagator_method == "cowell":
+        t_span = (0.0, (config.tf - config.t0).total_seconds())
+        results = solve_ivp(fun=lambda t, x: cowell_motion(x, add_drag=config.drag, add_J2=config.J2),
+                         t_span = (0.0, (config.tf - config.t0).total_seconds()),
+                         y0=config.x0,
+                         t_eval=np.linspace(t_span[0], t_span[1], config.time_steps),
+                         rtol=1e-10, atol=1e-10, method='RK45')
+        # print(np.linspace(config.t0.timestamp(), config.tf.timestamp(), config.time_steps))
+        # print(results.t)
+        return results.y
+    elif config.propagator_method == "encke":
+        duration_s = (config.tf - config.t0).total_seconds()
+
+        t_span = (0.0, duration_s)
+
+        t_eval = np.linspace(
+            0.0,
+            duration_s,
+            config.time_steps
+        )
+
+        # Encke integrates DEVIATION from the reference orbit.
+        delta_x0 = np.zeros(6)
+
+        def rhs(t, delta_x):
+            x_ref = kepler_cartesian_motion(
+                config.x0,
+                t,
+            )
+            return encke_motion(
+                t=t,
+                x_ref=x_ref,
+                delta_x=delta_x,
+                add_drag=config.drag,
+                add_J2=config.J2,
+            )
+
+        results = solve_ivp(
+            fun=rhs,
+            t_span=t_span,
+            y0=delta_x0,
+            t_eval=t_eval,
+            rtol=1e-10,
+            atol=1e-10,
+            method="RK45",
+        )
+
+        delta_x = results.y
+
+        # Reconstruct reference orbit at requested times
+        x_ref = np.column_stack([
+            kepler_cartesian_motion(config.x0, t)
+            for t in t_eval
+        ])
+
+        # Actual orbit = reference + deviation
+        return x_ref + delta_x
+        
 
 def propagate_sgp4(tle: str, t: float):
     """
@@ -585,3 +881,33 @@ def propagate_sgp4(tle: str, t: float):
     #TODO: SGP4 implementation
     x = np.array([0., 0., 0., 0., 0., 0.])
     return x
+
+if __name__ == "__main__":
+    r0 = 7000000
+    v0 = np.sqrt(mu/r0)
+    x0 = np.array([r0, 0, 0, 0, v0, 0])
+
+    t0 = datetime(2026, 8, 14, 0, 0, 0, tzinfo=timezone.utc)
+    T = 2*np.pi*np.sqrt(r0**3/mu)
+    tf = t0+timedelta(seconds=T)
+
+    config = simulation_config( 
+        t0=t0,
+        tf=tf,
+        time_steps=100,
+        propagator_method="encke",
+        x0=x0,
+        drag=False,
+        J2=False,
+    )
+
+    result = propagate_orbit(config)
+
+    print(result.shape)
+    print("Initial:")
+    print(result[:, 0])
+
+    print("Final:")
+    print(result[:, -1])
+    
+    print(result)
