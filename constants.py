@@ -11,4 +11,12 @@ SUN_RADIUS_m = 695700000.0 # m --- average radius of the sun
 EARTH_RADIUS_EQ_m = 6378137.0 # m --- equatorial radius of the Earth (semi-major axis of WGS 84 ellipsoid)
 EARTH_RADIUS_POLAR_m = 6356752.314245 # m --- radius of the Earth at poles (semi-minor axis of WGS 84 ellipsoid)
 
+EARTH_J2 = 1.08262668e-3 # dimensionless --- Earth J2 oblateness harmonic coefficient
+EARTH_OMEGA_rad_s = 7.2921159e-5 # rad/s --- Earth rotation rate
+
 MOON_RADIUS_m = 1737400.0 # m --- average radius of the Moon
+
+# Aliases for backward compatibility
+G = G_m3_kgs2
+M = M_kg
+mu = EARTH_MU_m3_s2
