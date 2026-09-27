@@ -52,6 +52,17 @@ class DragPerturbation(PerturbationModel):
         )
 
 def combine_perturbations(perturbations, t, state, spacecraft):
+    """
+
+    Args:
+        perturbations (list[PerturbationModel]): List of perturbation models to apply
+        t (float): Time
+        state (np.ndarray): Orbital state vector
+        spacecraft (Spacecraft): Spacecraft configuration
+
+    Returns:
+        np.ndarray: Combined perturbing accelerations
+    """
     a = np.zeros(3)
     for perturbation in perturbations:
         a+=perturbation.acceleration(t, state, spacecraft)
@@ -564,7 +575,7 @@ def kepler_motion(x: np.ndarray, t: float):
     t:      (float) Time since periapsis.
 
     Output:
-    r_osc_mag:     (float) Distance from central body of orbit to the spacecraft
+    r:     np.ndarray (6,) Orbital state vector in cartesian inertial frame in km.
     """
     kep, nu0_rad = cartesian2keplerian(x, mu_km3_s2)
     a = kep.a_km
@@ -602,6 +613,8 @@ def cowell_motion(t: float, x: np.ndarray, spacecraft, perturbations) -> np.ndar
 
     Arguments:
     x:      (np.ndarray) (6,) Orbital state vector. (x, y, z, v_x, v_y, v_z) in meters
+    spacecraft: (Spacecraft) Spacecraft configuration.
+    perturbations: (list[PerturbationModel]) List of perturbation models to apply
 
     Returns:
     xdot:   (np.ndarray) (6,) Orbit motion.
@@ -624,9 +637,9 @@ def encke_motion(t: float, x_ref: np.ndarray, delta_x: np.ndarray, config: Simul
     Calculate the orbital motion of a Cartesian state using Encke's method.
 
     Arguments:
-    r: (np.ndarray) (6,) (r, v).
-    x: (np.ndarray) (6,) (delta_r, delta_r_dot) (deviation).
-    p_m_s2: (np.ndarray) (3,) Perturbing accelerations.
+    x_ref: (np.ndarray) (6,) (r, v).
+    delta_x: (np.ndarray) (6,) (delta_r, delta_r_dot) (deviation).
+    config: (SimulationConfig) Simulation configuration.
 
     Returns:
     xdot:   (np.ndarray) (6,)  (delta_r, delta_r_dot) (deviation's derivative).

@@ -7,12 +7,18 @@ from pathlib import Path
 
 @dataclass
 class Spacecraft:
+    """
+    Spacecraft properties
+    """
     mass_kg: float
     drag_coefficient: float
     area_m2: float
     
 @dataclass
 class SimulationConfig:
+    """
+    Configurations for simulation
+    """
     t0: datetime
     tf: datetime
     x0: np.ndarray
