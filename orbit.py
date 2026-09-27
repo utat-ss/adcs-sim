@@ -1,10 +1,145 @@
 # Handle any calculations relating to orbital mechanics
 
+
+from dataclasses import dataclass
+
 from pydantic import BaseModel, field_validator, model_validator, ValidationInfo
 import numpy as np
-from constants import G, M, mu
+from constants import G_m3_kgs2, M_kg, EARTH_MU_m3_s2
 from collections.abc import Callable
-from root_finding import *
+from datetime import datetime, timezone, timedelta
+from scipy.integrate import solve_ivp
+import environment as env
+from utils import conversions as conv
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Protocol
+import numpy as np
+from simulation import SimulationConfig, Spacecraft, PerturbationModel
+
+G = G_m3_kgs2
+M = M_kg
+mu = EARTH_MU_m3_s2
+mu_km3_s2 = mu / 1e9
+e = np.e
+
+
+
+
+class J2Perturbation(PerturbationModel):
+
+    def acceleration(self, t, state, spacecraft):
+        r = state[:3]
+
+        return env.j2_acceleration_m_s2(r)
+
+class DragPerturbation(PerturbationModel):
+
+    def acceleration(self, t, state, spacecraft):
+        r = state[:3]
+        v = state[3:6]
+
+        v_atm = env.calc_atmospheric_velocity_m_s(r, t)
+        rho = env.atmospheric_density_kg_m3(r, t)
+
+        return env.aerodynamic_drag_perturbation_m_s2(
+            velocity_m_s=v,
+            velocity_atm_m_s=v_atm,
+            air_kg_m3=rho,
+            drag_coeff=spacecraft.drag_coefficient,
+            area_m_2=spacecraft.area_m2,
+            mass_kg=spacecraft.mass_kg,
+        )
+
+def combine_perturbations(perturbations, t, state, spacecraft):
+    """
+
+    Args:
+        perturbations (list[PerturbationModel]): List of perturbation models to apply
+        t (float): Time
+        state (np.ndarray): Orbital state vector
+        spacecraft (Spacecraft): Spacecraft configuration
+
+    Returns:
+        np.ndarray: Combined perturbing accelerations
+    """
+    a = np.zeros(3)
+    for perturbation in perturbations:
+        a+=perturbation.acceleration(t, state, spacecraft)
+    return a
+
+class CowellPropagator:
+
+    def propagate(self, config, spacecraft):
+
+        duration = (config.tf - config.t0).total_seconds()
+
+        t_eval = np.linspace(
+            0.0,
+            duration,
+            config.output_steps,
+        )
+
+        rhs = lambda t, x: cowell_motion(
+            t,
+            x,
+            spacecraft,
+            config.perturbations,
+        )
+
+        result = solve_ivp(
+            rhs,
+            (0.0, duration),
+            config.x0,
+            t_eval=t_eval,
+            rtol=1e-10,
+            atol=1e-10,
+        )
+
+        return result.t, result.y
+
+class EnckePropagator:
+
+    def propagate(self, config, spacecraft):
+
+        duration = (config.tf - config.t0).total_seconds()
+
+        t_eval = np.linspace(
+            0.0,
+            duration,
+            config.output_steps,
+        )
+
+        delta_x0 = np.zeros(6)
+
+        rhs = lambda t, dx: encke_motion(
+            t,
+            1000*kepler_motion(config.x0/1000, t),
+            dx,
+            config,
+        )
+
+        result = solve_ivp(
+            rhs,
+            (0.0, duration),
+            delta_x0,
+            t_eval=t_eval,
+            rtol=1e-10,
+            atol=1e-10,
+        )
+        print(result.t)
+        # print("WTFFFFFFFFFFFFFFFFFFFFF")
+        X_ref = np.column_stack([
+            1000*kepler_motion(config.x0/1000, t)
+            for t in result.t
+        ])
+
+        X = X_ref + result.y
+
+        return result.t, X
+
+
+    
 
 class KeplerianElements(BaseModel):
     """
@@ -286,56 +421,34 @@ def mean_anom2ecc_anom(M_rad: float) -> float:
     # TODO: requires root finder like Newton-Raphson; should be done in a separate module
     raise NotImplementedError("Mean anomaly to eccentric anomaly not implemented pending root finding tools")
 
-def time2true_anom(a_km: float, e: float, mu_km3_s2: float, dt_s: float) -> float:
+def newton_method(x_n: float, func: Callable[[float], float], d_func: Callable[[float], float], 
+                  tolerance: float = 1e-10, max_iter: int = 20) -> float:
     """
-    Calculate the true anomaly given an orbit's shape parameters and the time since periapsis passage.
-
+    Newton's method, root finder. Used to solve transcendental function.
+    
     Arguments:
-    a_km:       [float] Semi-major axis of the orbit.
-    e:          [float] Eccentricity of the orbit.
-    mu_km3_s2:  [float] Gravitational parameter of the primary body.
-    dt_s:       [float] Time since passage of periapsis. Should be less than the orbital period.
+    x_n:         (float) nth guess of root of equation
+    func:        The function to solve
+    d_func:      Derivative of the function to solve
+    tolerance:   How precise the answer should be
+    max_iter:    Maximum number of times to iterate
 
-    Returns:
-    nu_rad:     [float] True anomaly at the specified time.
+    Output:
+    x_new:  n+1th guess of root of equation
     """
-    T_s = get_orbit_period(a_km, mu_km3_s2)
-    n_rad_s = period2mean_motion(T_s)
-    M_rad = time2mean_anom(n_rad_s, dt_s)
-    E_rad = mean_anom2ecc_anom(M_rad)
-    nu_rad = ecc_anom2true_anom(E_rad, e)
-    return nu_rad
 
-def epoch2time_since_periapsis(
-        target_epoch_j2000_d: float,
-        reference_epoch_j2000_d: float,
-        kep_elements: KeplerianElements,
-        reference_nu_rad: float,
-        mu_km3_s2: float) -> float:
-    """
-    Convert target epoch time to time since the most recent passage of periapsis.
+    for _ in range(max_iter):
+        f = func(x_n)
+        df = d_func(x_n)
+        x_new = x_n - (f / df)
 
-    Arguments:
-    target_epoch_j2000_d:      [float] Target epoch, in days since J2000.
-    reference_epoch_j2000_d:   [float] Epoch where the orbital state is known, in days since J2000.
-    kep_elements:              [KeplerianElements] Orbit elements at the reference epoch.
-    reference_nu_rad:          [float] True anomaly at the reference epoch.
-    mu_km3_s2:                 [float] Gravitational parameter of the primary body.
-
-    Returns:
-    target_dt_s:               [float] Time since most recent passage of periapsis.
-    """
-    T_s = get_orbit_period(kep_elements.a_km, mu_km3_s2)
-    n_rad_s = period2mean_motion(T_s)
-
-    E_rad = true_anom2ecc_anom(kep_elements.e, reference_nu_rad)
-    M_rad = ecc_anom2mean_anom(E_rad, kep_elements.e) % (2 * np.pi)
-
-    reference_dt_s = M_rad / n_rad_s
-    epoch_dt_s = (target_epoch_j2000_d - reference_epoch_j2000_d) * 86400
-    target_dt_s = (reference_dt_s + epoch_dt_s) % T_s
-
-    return target_dt_s
+        if abs(x_new - x_n) < tolerance:
+            return x_new
+            # no longer changing the estimation enough to be meaningful
+        
+        x_n = x_new # update x to next step
+        
+    return x_n
 
 def get_ang_momentum(a_km: float, e: float, mu_km3_s2: float) -> float:
     """
@@ -364,7 +477,6 @@ def keplerian2cartesian(kep: KeplerianElements, nu_rad: float, mu_km3_s2: float)
     Returns:
     x:          [np.ndarray] 6x1 Orbital state vector in cartesian inertial coordinates.
     """
-    raise NotImplementedError("Keplerian elements to cartesian state vector not implemented pending rotation tools")
 
     # State vector in perifocal frame
     h_km2_s = get_ang_momentum(kep.a_km, kep.e, mu_km3_s2)
@@ -373,7 +485,7 @@ def keplerian2cartesian(kep: KeplerianElements, nu_rad: float, mu_km3_s2: float)
 
     # Rotate to ECI
     # TODO: rotation utils
-    R = C3(-om_rad) @ C1(-i_rad) @ C3(-Om_rad)
+    R = conv.rot_z(-kep.om_rad) @ conv.rot_x(-kep.i_rad) @ conv.rot_z(-kep.Om_rad)
     r_g_km = r_w_km @ R
     v_g_km_s = v_w_km_s @ R
 
@@ -382,77 +494,105 @@ def keplerian2cartesian(kep: KeplerianElements, nu_rad: float, mu_km3_s2: float)
 
     return x
 
-def cartesian2keplerian(x: np.ndarray, mu_km3_s2: float) -> tuple[KeplerianElements, float]:
-    """
-    Convert a cartesian state vector to Keplerian elements with true anomaly.
+def cartesian2keplerian(
+    x: np.ndarray,
+    mu_km3_s2: float
+) -> tuple[KeplerianElements, float]:
 
-    Arguments:
-    x:                  [np.ndarray] (6x1) Orbital state vector in cartesian inertial frame.
-    mu_km3_s2:          [float] Gravitational parameter of the primary body.
+    r_vec = x[:3]
+    v_vec = x[3:]
 
-    Returns:
-    kep:                [KeplerianElements] Object containing the global Keplerian elements of the orbit.
-    nu_rad:             [float] True anomaly corresponding to the position vector.
-    """
-    r_g_km = x[0:3]
-    r_km = np.linalg.norm(r_g_km)
-    v_g_km_s = x[3:]
-    v_km_s = np.linalg.norm(v_g_km_s)
+    r = np.linalg.norm(r_vec)
+    v = np.linalg.norm(v_vec)
 
-    v_r_km_s = np.dot(v_g_km_s, r_g_km / r_km)
-    v_t_km_s = np.sqrt(v_g_km_s**2 - v_r_km_s**2)
+    # Angular momentum
+    h_vec = np.cross(r_vec, v_vec)
+    h = np.linalg.norm(h_vec)
 
-    # Orbit angular momentum
-    h_km2_s = np.cross(r_g_km, v_g_km_s)
+    # Node vector
+    k_hat = np.array([0.0, 0.0, 1.0])
+    n_vec = np.cross(k_hat, h_vec)
+    n = np.linalg.norm(n_vec)
 
-    # Find semi-major axis
-    a_km = (mu_km3_s2 * r_km) / (2 * mu_km3_s2 - r_km * v_km_s**2)
-
-    # Inclination
-    i_rad = np.arccos(h_km2_s[2] / h_km2_s)
-
-    # Right ascension of the ascending node
-    K = np.array((0, 0, 1))
-    N = np.cross(K, h_km2_s)
-    Om_rad = 2 * np.pi - np.arccos(N[0] / np.linalg.norm(N))
-
-    # Eccentricity
-    e_vec = np.cross(v_g_km_s, h_km2_s) / mu_km3_s2 - r_g_km / r_km
+    # Eccentricity vector
+    e_vec = (
+        np.cross(v_vec, h_vec) / mu_km3_s2
+        - r_vec / r
+    )
     e = np.linalg.norm(e_vec)
 
+    # Semi-major axis
+    a = 1.0 / (
+        2.0 / r
+        - v**2 / mu_km3_s2
+    )
+
+    # Inclination
+    i = np.arccos(
+        np.clip(h_vec[2] / h, -1.0, 1.0)
+    )
+
+    # RAAN
+    Om = np.arctan2(
+        n_vec[1],
+        n_vec[0]
+    ) % (2 * np.pi)
+
     # Argument of periapsis
-    om_rad = 2 * np.pi - np.arccos(np.dot(N, e_vec) / (N * e))
+    om = np.arctan2(
+        np.dot(np.cross(n_vec, e_vec), h_vec)
+        / (n * e * h),
+        np.dot(n_vec, e_vec)
+        / (n * e),
+    ) % (2 * np.pi)
 
     # True anomaly
-    nu_rad = np.arccos(np.dot(r_g_km / r_km, e_vec / e))
+    nu = np.arctan2(
+        np.dot(np.cross(e_vec, r_vec), h_vec)
+        / (e * r * h),
+        np.dot(e_vec, r_vec)
+        / (e * r),
+    ) % (2 * np.pi)
 
-    kep = KeplerianElements(a_km = a_km,
-                            e = e,
-                            i_rad = i_rad,
-                            Om_rad = Om_rad,
-                            om_rad = om_rad)
+    kep = KeplerianElements(
+        a_km=a,
+        e=e,
+        i_rad=i,
+        Om_rad=Om,
+        om_rad=om,
+    )
 
-    return kep, nu_rad
+    return kep, nu
 
 
-def kepler_motion(kep: KeplerianElements, t: float):
+def kepler_motion(x: np.ndarray, t: float):
     """
     Unperturbed keplerian propagator. 
     Given an orbital state described by x0, recorded at t0, return the propagated orbital state at time t.
 
     Arguments:
-    kep:    KeplerianElements that describe the orbit. (semi-major axis [km], eccentricity, inclination [rad], right ascension of the ascending node [rad], argument of periapsis [rad])
+    x:      (np.ndarray) (6,) Orbital state vector in cartesian inertial frame in km.
     t:      (float) Time since periapsis.
 
     Output:
-    r_osc_mag:     (float) Distance from central body of orbit to the spacecraft
+    r:     np.ndarray (6,) Orbital state vector in cartesian inertial frame in km.
     """
+    kep, nu0_rad = cartesian2keplerian(x, mu_km3_s2)
     a = kep.a_km
-    n = np.sqrt(mu/a**3) # mean motion
-    M = n*(t) 
     e = kep.e
-    # in the normal formula: tp = time of periapsis, t = current time, and M = n*(t-tp)
-    # but here the t is already current time - time of periapsis, so we pass that in
+    n = np.sqrt(mu_km3_s2/a**3) # mean motion
+
+    # nu0 -> E0
+    E0 = 2 * np.arctan2(
+        np.sqrt(1 - e) * np.sin(nu0_rad / 2),
+        np.sqrt(1 + e) * np.cos(nu0_rad / 2),
+    )
+
+    # E0 -> M0
+    M0 = E0 - e * np.sin(E0)
+
+    # Propagate mean anomaly
+    M = M0 + n * t
 
     E = newton_method(M, 
                       lambda E: E - e*np.sin(E) - M, # the equation we equate to 0 and are solving for
@@ -463,60 +603,18 @@ def kepler_motion(kep: KeplerianElements, t: float):
     v = 2 * np.arctan2(np.sqrt(1 + e) * np.sin(E / 2),
                        np.sqrt(1 - e) * np.cos(E / 2)
                        ) # true anomaly
-    
-    r_osc_mag = a * (1-e**2) / (1+e*np.cos(v))
 
-    return r_osc_mag
-    
+    return keplerian2cartesian(kep, v, mu_km3_s2)
 
 
-def mee_motion(me: ModifiedEquinoctialElements, L_rad: float, p_rsw_m2_s2: np.ndarray, mu_km3_s2: float) -> np.ndarray:
-    """
-    Given an orbital state described by MEEs and any perturbations in the Radial-Cross-track-Along-track frame (RSW),
-    determine the time rate of change of these elements.
-
-    Arguments:
-    me:             [ModifiedEquinoctialElements] Modified equinoctial elements describing the orbit.
-    L_rad:          [float] True longitude {Om + om + nu}
-    p_rsw_m2_s2:    [np.ndarray] (3x1) Vector of summed perturbing accelerations in the RSW frame.
-    mu_km3_s2:      [float] Gravitational parameter of the primary body.
-    """
-    
-    # Auxiliary variables
-    qx = 1 + me.f * np.cos(L_rad) + me.g * np.sin(L_rad)
-    s2 = 1 + me.h**2 + me.k**2
-    p_mu = np.sqrt(me.p_km / mu_km3_s2)
-
-    # Equations of motion
-    pdot_km_s = p_mu * 2 * (me.p_km / qx) * p_rsw_m2_s2[1]
-
-    fdot__s = p_mu * (np.sin(L_rad) * p_rsw_m2_s2[0])\
-            + (1 / qx) * ((qx + 1) * np.cos(L_rad) + me.f) * p_rsw_m2_s2[1]\
-            - (me.g / qx) * (me.h * np.sin(L_rad) - me.k * np.cos(L_rad) * p_rsw_m2_s2[2])
-
-    gdot__s = p_mu * (-np.cos(L_rad) * p_rsw_m2_s2[0])\
-            + (1 / qx) * ((qx + 1) * np.sin(L_rad) + me.g) * p_rsw_m2_s2[1]\
-            + (me.f / qx) * (me.h * np.sin(L_rad) - me.k * np.cos(L_rad) * p_rsw_m2_s2[2])
-
-    hdot__s = p_mu * ((s2 * np.cos(L_rad)) / (2 * qx)) * p_rsw_m2_s2[2]
-
-    kdot__s = p_mu * ((s2 * np.sin(L_rad)) / (2 * qx)) * p_rsw_m2_s2[2]
-
-    Ldot_rad_s = np.sqrt(mu_km3_s2 * me.p_km) * (qx / me.p_km)**2\
-            + p_mu * (1 / qx) * (me.h * np.sin(L_rad) - me.k * np.cos(L_rad)) * p_rsw_m2_s2[2]
-
-    medot = np.array([pdot_km_s, fdot__s, gdot__s, hdot__s, kdot__s, Ldot_rad_s])
-
-    return medot
-
-
-def cowell_motion(x: np.ndarray, p_m_s2: np.ndarray) -> np.ndarray:
+def cowell_motion(t: float, x: np.ndarray, spacecraft, perturbations) -> np.ndarray:
     """
     Calculate the orbital motion of a Cartesian state using Cowell's method.
 
     Arguments:
-    x:      (np.ndarray) (6,) Orbital state vector. (x, y, z, v_x, v_y, v_z)
-    p_m_s2 (np.ndarray) (3,) Perturbing accelerations.
+    x:      (np.ndarray) (6,) Orbital state vector. (x, y, z, v_x, v_y, v_z) in meters
+    spacecraft: (Spacecraft) Spacecraft configuration.
+    perturbations: (list[PerturbationModel]) List of perturbation models to apply
 
     Returns:
     xdot:   (np.ndarray) (6,) Orbit motion.
@@ -526,49 +624,45 @@ def cowell_motion(x: np.ndarray, p_m_s2: np.ndarray) -> np.ndarray:
     r_vec = x[0:3] # is shape (3,)
     r_mag = np.linalg.norm(r_vec) # magnitude of r vector
 
-    dv = ( -mu*r_vec/(r_mag)**3 ) + p_m_s2
+    p_m_s2 = combine_perturbations(perturbations, t, x, spacecraft)
+
+    dv = (-mu*r_vec/(r_mag)**3)+p_m_s2
     
     xdot = np.concatenate((dr, dv))  # is shape (6,)
     return xdot
 
-def encke_motion(t: float, state: list[np.ndarray], p_m_s2: np.ndarray):
+
+def encke_motion(t: float, x_ref: np.ndarray, delta_x: np.ndarray, config: SimulationConfig) -> np.ndarray:
     """
     Calculate the orbital motion of a Cartesian state using Encke's method.
 
     Arguments:
-    state: augmented state vector, list of 2 np.ndarrays, 
-        1. x: (np.ndarray) (delta_r, delta_r_dot) (deviation).
-        2, r: (np.ndarray) (6,) (r, v).
-    p_m_s2: (np.ndarray) (3,) Perturbing accelerations.
+    x_ref: (np.ndarray) (6,) (r, v).
+    delta_x: (np.ndarray) (6,) (delta_r, delta_r_dot) (deviation).
+    config: (SimulationConfig) Simulation configuration.
 
     Returns:
     xdot:   (np.ndarray) (6,)  (delta_r, delta_r_dot) (deviation's derivative).
     """
+    r_ref = x_ref[0:3]
+    v_ref = x_ref[3:6]
+    r_mag = np.linalg.norm(r_ref) # magnitude of r vector
 
-    x = state[0:5]
-    r = state[6:11]
-    r_vec = r[0:3]
-    r_mag = np.linalg.norm(r_vec) # magnitude of r vector
+    delta_r_dot = delta_x[3:6] # (3,)
 
-    kep = cartesian2keplerian(r, mu) # for now assume we are only doing encke motion for orbit around Earth
-    r_osc = kepler_motion(kep, t) # r_osc is distance from center of primary body to the spacecraft along the osculating (unperturbed) orbit
+    delta_r = delta_x[0:3] # (3,)
 
-    delta_r_dot = x[3:6] # (3,)
-
-    delta_r = x[0:3] # (3,)
-
-    a = -mu/r_osc**3 # (1, )
-    b = 2*r_vec - delta_r  # (3, )
-    c = np.dot(delta_r, b) # (1, )
-    d = c / (r_mag**2) # (1, )
-    e = 1 - d**(3/2) # (1,)
-    f = e*r_vec # (3, )
+    q = np.dot(delta_r, (delta_r+2*r_ref)/np.linalg.norm(r_ref)**2)
+    fq = q*((q**2+3*q+3)/((1+q)**1.5+1))
+    a = -mu/r_mag**3*(delta_r-fq*(r_ref+delta_r))
     
-    delta_r_dot_dot = a*(delta_r - f) + p_m_s2
+    p_m_s2 = combine_perturbations(config.perturbations, t, 1000*kepler_motion(config.x0/1000, t), config.spacecraft)
+    delta_r_dot_dot = a + p_m_s2
 
     xdot = np.concatenate((delta_r_dot, delta_r_dot_dot)) # (6,)
 
     return xdot
+
 
 def propagate_sgp4(tle: str, t: float):
     """
