@@ -2,7 +2,7 @@ import pytest
 import numpy as np
 from hardware.adcs import ADCS
 
-#pytest fixtures
+# pytest fixtures
 @pytest.fixture
 def valid_moi():
     """Simple physically valid moment of inertia matrix."""
@@ -30,7 +30,7 @@ def test_find_config_path_existing_model(tmp_path, monkeypatch):
 
     monkeypatch.setattr("hardware.adcs.SENSOR_ICD_DIR", tmp_path)
 
-    adcs = ADCS("test", np.eye(3))
+    adcs = ADCS("test", np.eye(3)) # np.eye(3) is a placeholder for the moment of inertia matrix
 
     result = adcs._find_config_path("Test-Model")
     assert result == icd_file
@@ -109,3 +109,45 @@ def test_validate_moi_triangle_inequality(moi_triangle_inequality):
 
     assert result is False
     assert error_code == -3
+
+# Tests for eval_fine_eclipse method of ADCS class
+
+@pytest.mark.parametrize(
+    "earth_vector_for_sun_visible",
+    [
+        pytest.param(
+            np.array([3.84e7, 3.84e7, 0]),
+            id="earth-offset-quadrant-I-xyplane",
+        ),
+        pytest.param(
+            np.array([0, 3.84e7, 0]),
+            id="earth-offset-y-axis",
+        ),
+        pytest.param(
+            np.array([0, 0, 3.84e7]),
+            id="earth-offset-z-axis",
+        ),
+        pytest.param(
+            np.array([-3.84e7, 3.84e7, 0]),
+            id="earth-offset-quadrant-II-xyplane",
+        ),
+        pytest.param(
+            np.array([3.84e7, -3.84e7, 0]),
+            id="earth-offset-quadrant-IV-xyplane",
+        ),
+    ],
+)
+def test_sun_fully_visible(earth_vector_for_sun_visible):
+    adcs = ADCS("test", np.eye(3)) 
+
+    AU_m = 149.6e9  # Astronomical Unit in meters
+
+    # below in metres
+    result = adcs.eval_eclipse_fine(
+        np.array([AU_m, 0, 0]), # sun vector, Distance of satelite from sun: 1 AU_m
+        earth_vector_for_sun_visible, # earth vector 
+        1e6
+    )
+
+    assert result == pytest.approx(1.0) # Sun 100% visible
+
