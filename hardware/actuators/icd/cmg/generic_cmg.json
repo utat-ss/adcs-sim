@@ -1,0 +1,5 @@
+{
+  "model": "Generic CMG",
+  "max_gimbal_rate_rad_s": 1.0,
+  "tau_s": 0.05
+}
