@@ -111,6 +111,21 @@ def test_validate_moi_triangle_inequality(moi_triangle_inequality):
     assert error_code == -3
 
 # Tests for eval_fine_eclipse method of ADCS class
+@pytest.mark.parametrize(
+    "sun_vec, body_vec",
+    [
+        (np.array([1.0, 0.0]), np.array([1.0, 0.0, 0.0])),         # 2D sun vector
+        (np.array([1.0, 0.0, 0.0]), np.array([1.0, 0.0, 0.0, 0.0])), # 4D body vector
+        (np.array([[1.0, 0.0, 0.0]]), np.array([1.0, 0.0, 0.0])),   # 2D matrix shape (1, 3)
+        ([], [1.0, 0.0, 0.0]),                                       # Empty input
+    ],
+    ids=["2d-sun", "4d-body", "matrix-sun", "empty-sun"]
+)
+def test_eval_eclipse_fine_invalid_shape(sun_vec, body_vec): #input validation
+    adcs = ADCS("test", np.eye(3))
+    with pytest.raises(ValueError, match="must both be 3D vectors"):
+        adcs.eval_eclipse_fine(sun_vec, body_vec, body_radius=1e6)
+
 
 @pytest.mark.parametrize(
     "earth_vector_for_sun_visible",
@@ -137,7 +152,7 @@ def test_validate_moi_triangle_inequality(moi_triangle_inequality):
         ),
     ],
 )
-def test_sun_fully_visible(earth_vector_for_sun_visible):
+def test_sun_eval_eclipse_fine_fully_visible(earth_vector_for_sun_visible):
     adcs = ADCS("test", np.eye(3)) 
 
     AU_m = 149.6e9  # Astronomical Unit in meters
@@ -150,4 +165,40 @@ def test_sun_fully_visible(earth_vector_for_sun_visible):
     )
 
     assert result == pytest.approx(1.0) # Sun 100% visible
+
+@pytest.mark.parametrize(
+    "sun_vector_notVisible, earth_vector_notVisible",
+    [
+        pytest.param(
+            np.array([149.6e9, 0, 0]),
+            np.array([2.0e8, 0, 0]),
+            id="eclipse-along-x-axis",
+        ),
+        pytest.param(
+            np.array([0, 149.6e9, 0]),
+            np.array([0, 2.0e8, 0]),
+            id="eclipse-along-y-axis",
+        ),
+        pytest.param(
+            np.array([0, 0, 149.6e9]),
+            np.array([0, 0, 2.0e8]),
+            id="eclipse-along-z-axis",
+        ),
+        pytest.param(
+            np.array([149.6e9, 149.6e9, 149.6e9]),
+            np.array([2.0e8, 2.0e8, 2.0e8]),
+            id="eclipse-diagonal-xyz",
+        ),
+    ],
+)
+def test_sun_eval_eclipse_fine_not_visible(sun_vector_notVisible, earth_vector_notVisible):
+    adcs = ADCS("test", np.eye(3))
+
+    result = adcs.eval_eclipse_fine(
+        sun_vector_notVisible,
+        earth_vector_notVisible,
+        1e6,
+    )
+
+    assert result == pytest.approx(0.0)
 
