@@ -320,17 +320,17 @@ def test_heuristic_eclipse_various_geometries(eclipse_heuristic_sun_vector, ecli
         # Earth is in the general direction of the sun, but offset beyond Earth radius.
         pytest.param(
             np.array([AU_m, 0.0, 0.0]), np.array([R_ORBIT, 1.5 * R_EARTH, 0.0]),
-            id="aligned-x-axis",
+            id="lateral-offset-outside",
         ),
         # Earth is collinear with sun vector but behind the satellite (sun_dot_earth < 0)
         pytest.param(
             np.array([AU_m, 0.0, 0.0]), np.array([-R_ORBIT, 0.0, 0.0]),
-            id="boundary-just-inside-radius",
+            id="earth-behind-satellite",
         ),
         # Earth vector is exactly 90 degrees away from sun vector (sun_dot_earth == 0)
         pytest.param(
             np.array([AU_m, 0.0, 0.0]), np.array([0.0, R_ORBIT, 0.0]),
-            id="aligned-x-axis",
+            id="earth-perpendicular-to-sun",
         ),
     ],
 )
