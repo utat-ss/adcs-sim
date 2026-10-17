@@ -2,6 +2,8 @@ import pytest
 import numpy as np
 from hardware.adcs import ADCS
 
+# command: python -m uv run pytest tests/test_eclipse_detection.py -v 
+
 # pytest fixtures
 @pytest.fixture
 def valid_moi():
@@ -202,3 +204,60 @@ def test_sun_eval_eclipse_fine_not_visible(sun_vector_notVisible, earth_vector_n
 
     assert result == pytest.approx(0.0)
 
+def test_sun_eval_eclipse_fine_half_visibility():
+    """Body is centered on the Sun but smaller in angular diameter."""
+    AU_m = 149.6e9  # Astronomical Unit in meters
+    SUN_RADIUS_m = 6.9634e8  # Sun radius in meters
+
+    adcs = ADCS("test", np.eye(3))
+    sun_vector = np.array([AU_m, 0.0, 0.0])
+    body_vector = np.array([AU_m * 0.5, 0.0, 0.0])
+
+    # angular radius sun ≈ SUN_RADIUS / AU_m
+    # Choose body_radius so body angular diameter is half the sun's angular diameter
+    body_radius = (SUN_RADIUS_m / 2.0) * 0.5
+
+    result = adcs.eval_eclipse_fine(sun_vector, body_vector, body_radius)
+    
+    # Expected visibility is approx 1 - (theta_body / theta_sun) ≈ 0.5 (Sun 50% visible)
+    assert 0.0 < result < 1.0
+    assert result == pytest.approx(0.5, rel=1e-2)
+
+def test_partial_eclipse_less_than_half_visible():
+    """Body overlaps center of sun disk but does not fully engulf it.
+    Result should be less than 50% visible."""
+    adcs = ADCS("test", np.eye(3))
+    AU_m = 149.6e9 
+    sun_vector = np.array([AU_m, 0.0, 0.0])
+    
+    # Slight angular offset on y-axis
+    dist_body = 1.0e8
+    # Angular radius of Sun ≈ 6.9634e8 / 1.496e11 ≈ 4.65e-3 rad
+    # Place body edge just past the center of the Sun
+    offset_y = dist_body * 1.0e-3
+    body_vector = np.array([dist_body, offset_y, 0.0])
+    body_radius = dist_body * 4.0e-3
+
+    result = adcs.eval_eclipse_fine(sun_vector, body_vector, body_radius)
+    
+    # Partial eclipse covering > 50% of the diameter
+    assert 0.0 < result < 0.5
+
+def test_partial_eclipse_more_than_half_visible():
+    """Body overlaps outer edge of sun disk without covering the center.
+    Result should be more than 50% visible."""
+    adcs = ADCS("test", np.eye(3))
+    AU_m = 149.6e9
+    sun_vector = np.array([AU_m, 0.0, 0.0])
+
+    dist_body = 1.0e8
+    # Angular radius of Sun ≈ 4.65e-3 rad
+    # Place body center at 5.5 mrad with radius 2.0 mrad:
+    # Inner edge reaches 5.5 - 2.0 = 3.5 mrad (inside the 4.65 mrad disk, but outside center)
+    offset_y = dist_body * 5.5e-3
+    body_vector = np.array([dist_body, offset_y, 0.0])
+    body_radius = dist_body * 2.0e-3
+
+    result = adcs.eval_eclipse_fine(sun_vector, body_vector, body_radius)
+
+    assert 0.5 < result < 1.0
