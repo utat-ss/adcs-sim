@@ -4,6 +4,11 @@ from hardware.adcs import ADCS
 
 # command: python -m uv run pytest tests/test_eclipse_detection.py -v 
 
+# constants for testing
+AU_m = 149.6e9
+R_EARTH = 6.3781e6  # ~6378 km (const.EARTH_RADIUS_EQ_m)
+R_ORBIT = R_EARTH + 500e3  # Typical LEO altitude (500 km)
+
 # pytest fixtures
 @pytest.fixture
 def valid_moi():
@@ -156,9 +161,6 @@ def test_eval_eclipse_fine_invalid_shape(sun_vec, body_vec): #input validation
 )
 def test_sun_eval_eclipse_fine_fully_visible(earth_vector_for_sun_visible):
     adcs = ADCS("test", np.eye(3)) 
-
-    AU_m = 149.6e9  # Astronomical Unit in meters
-
     # below in metres
     result = adcs.eval_eclipse_fine(
         np.array([AU_m, 0, 0]), # sun vector, Distance of satelite from sun: 1 AU_m
@@ -206,7 +208,6 @@ def test_sun_eval_eclipse_fine_not_visible(sun_vector_notVisible, earth_vector_n
 
 def test_sun_eval_eclipse_fine_half_visibility():
     """Body is centered on the Sun but smaller in angular diameter."""
-    AU_m = 149.6e9  # Astronomical Unit in meters
     SUN_RADIUS_m = 6.9634e8  # Sun radius in meters
 
     adcs = ADCS("test", np.eye(3))
@@ -227,7 +228,6 @@ def test_partial_eclipse_less_than_half_visible():
     """Body overlaps center of sun disk but does not fully engulf it.
     Result should be less than 50% visible."""
     adcs = ADCS("test", np.eye(3))
-    AU_m = 149.6e9 
     sun_vector = np.array([AU_m, 0.0, 0.0])
     
     # Slight angular offset on y-axis
@@ -247,7 +247,6 @@ def test_partial_eclipse_more_than_half_visible():
     """Body overlaps outer edge of sun disk without covering the center.
     Result should be more than 50% visible."""
     adcs = ADCS("test", np.eye(3))
-    AU_m = 149.6e9
     sun_vector = np.array([AU_m, 0.0, 0.0])
 
     dist_body = 1.0e8
@@ -261,3 +260,80 @@ def test_partial_eclipse_more_than_half_visible():
     result = adcs.eval_eclipse_fine(sun_vector, body_vector, body_radius)
 
     assert 0.5 < result < 1.0
+
+# Tests for eval_fine_heuristic method of ADCS class
+@pytest.mark.parametrize(
+    "invalid_sun_vec, invalid_earth_vec",
+    [
+        (np.array([1.0, 0.0]), np.array([1.0, 0.0, 0.0])),  # 2D sun vector
+        (np.array([1.0, 0.0, 0.0]), np.array([1.0, 0.0])),  # 2D earth vector
+    ],
+    ids=["2d-sun", "2d-earth"],
+)
+def test_heuristic_invalid_dimensions_raise(invalid_sun_vec, invalid_earth_vec):
+    """Test that eval_eclipse_heuristic raises ValueError for invalid input dimensions."""
+    adcs = ADCS("test", np.eye(3))
+    with pytest.raises(ValueError, match="must both be 3D vectors"):
+        adcs.eval_eclipse_heuristic(invalid_sun_vec, invalid_earth_vec, R_EARTH)
+
+## Eclipse
+@pytest.mark.parametrize(
+    "eclipse_heuristic_sun_vector, eclipse_heuristic_earth_vector",
+    [
+        pytest.param(
+            np.array([AU_m, 0.0, 0.0]), np.array([R_ORBIT, 0.0, 0.0]),
+            id="aligned-x-axis",
+        ),
+        pytest.param(
+            np.array([0.0, AU_m, 0.0]), np.array([0.0, R_ORBIT, 0.0]),
+            id="aligned-y-axis",
+        ),
+        pytest.param(
+            np.array([0.0, 0.0, AU_m]), np.array([0.0, 0.0, R_ORBIT]),
+            id="aligned-z-axis",
+        ),
+        # 3D diagonal orientation (all positive octant)
+        pytest.param(
+            np.array([AU_m, AU_m, AU_m]) / np.sqrt(3), np.array([R_ORBIT, R_ORBIT, R_ORBIT]) / np.sqrt(3),
+            id="aligned-diagonal-xyz",
+        ),
+        # Multi-axis offset still well within cylinder radius
+        pytest.param(
+            np.array([AU_m, 0.0, 0.0]), np.array([R_ORBIT, 0.3 * R_EARTH, 0.4 * R_EARTH]),  # norm = 0.5 * R_EARTH
+            id="offset-compound-yz-inside",
+        ),
+        # Grazing edge: just inside the Earth's radius (99% of R_Earth)
+        pytest.param(
+            np.array([AU_m, 0.0, 0.0]), np.array([R_ORBIT, 0.99 * R_EARTH, 0.0]),
+            id="boundary-just-inside-radius",
+        ),
+    ],
+)
+def test_heuristic_eclipse_various_geometries(eclipse_heuristic_sun_vector, eclipse_heuristic_earth_vector):
+    adcs = ADCS("test", np.eye(3))
+    assert adcs.eval_eclipse_heuristic(eclipse_heuristic_sun_vector, eclipse_heuristic_earth_vector, R_EARTH) is True
+
+## No Eclipse
+@pytest.mark.parametrize(
+    "no_eclipse_heuristic_sun_vector, no_eclipse_heuristic_earth_vector",
+    [
+        # Earth is in the general direction of the sun, but offset beyond Earth radius.
+        pytest.param(
+            np.array([AU_m, 0.0, 0.0]), np.array([R_ORBIT, 1.5 * R_EARTH, 0.0]),
+            id="aligned-x-axis",
+        ),
+        # Earth is collinear with sun vector but behind the satellite (sun_dot_earth < 0)
+        pytest.param(
+            np.array([AU_m, 0.0, 0.0]), np.array([-R_ORBIT, 0.0, 0.0]),
+            id="boundary-just-inside-radius",
+        ),
+        # Earth vector is exactly 90 degrees away from sun vector (sun_dot_earth == 0)
+        pytest.param(
+            np.array([AU_m, 0.0, 0.0]), np.array([0.0, R_ORBIT, 0.0]),
+            id="aligned-x-axis",
+        ),
+    ],
+)
+def test_heuristic_no_eclipse_various_geometries(no_eclipse_heuristic_sun_vector, no_eclipse_heuristic_earth_vector):
+    adcs = ADCS("test", np.eye(3))
+    assert adcs.eval_eclipse_heuristic(no_eclipse_heuristic_sun_vector, no_eclipse_heuristic_earth_vector, R_EARTH) is False
