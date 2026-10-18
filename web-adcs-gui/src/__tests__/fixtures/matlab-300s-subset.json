@@ -1,0 +1,462 @@
+{
+  "schema": "utat.adcs.replay.v1",
+  "provenance": {
+    "model": "adcs_sim",
+    "source": "MATLAB/Simulink exported by export_adcs_results.m",
+    "generatedUtc": "2026-09-21T17:42:26Z",
+    "durationSec": 300,
+    "sampleCount": 3001,
+    "samplePolicy": "uniform position-grid stride to at most 3001 replay samples"
+  },
+  "centralBody": {
+    "name": "Earth",
+    "frame": "ECI",
+    "radiusKm": 6371,
+    "muM3S2": 398600441800000.0,
+    "j2": 0.00108262668
+  },
+  "simulation": {
+    "epochJd": 2461083.5,
+    "dtSec": 0.01,
+    "tEndSec": 300,
+    "attitudeQuaternionConvention": "scalar-first passive ECI-to-body",
+    "positionFrame": "ECI",
+    "positionUnits": "km"
+  },
+  "spacecraft": {
+    "dimensionsM": [
+      0.1,
+      0.1,
+      0.3
+    ],
+    "massKg": 4,
+    "rwAxesBody": [
+      [
+        0.816496580927726,
+        0,
+        -0.816496580927726,
+        0
+      ],
+      [
+        0,
+        0.816496580927726,
+        0,
+        -0.816496580927726
+      ],
+      [
+        0.5773502691896257,
+        0.5773502691896257,
+        0.5773502691896257,
+        0.5773502691896257
+      ]
+    ],
+    "mtqAxesBody": [
+      [
+        1,
+        0,
+        0
+      ],
+      [
+        0,
+        1,
+        0
+      ],
+      [
+        0,
+        0,
+        1
+      ]
+    ]
+  },
+  "visualization": {
+    "cameraBoresightBody": [
+      0,
+      0,
+      1
+    ],
+    "cameraFovHalfDeg": 8,
+    "cameraNote": "Illustrative +Z viewer cone; not a modeled payload camera or tracker acceptance angle.",
+    "starTrackerBoresightBody": [
+      0,
+      0,
+      1
+    ],
+    "starTrackerExclusionSunDeg": 45,
+    "starTrackerExclusionMoonDeg": 25,
+    "starTrackerExclusionEarthDeg": 25
+  },
+  "metrics": {
+    "duration_s": 300,
+    "sample_count": 30001,
+    "final_attitude_excursion_deg": 161.85120207731472,
+    "peak_attitude_excursion_deg": 179.99923055687577,
+    "max_quat_norm_error": 2.220446049250313E-16,
+    "final_rate_norm_deg_s": 0.9222756609733184,
+    "peak_rate_norm_deg_s": 1.3128112331009991,
+    "rms_rate_norm_deg_s": 1.0064917173050798,
+    "peak_rate_axes_deg_s": [
+      0.5729577951308232,
+      0.6175951009397207,
+      1.1459155902616465
+    ],
+    "rms_rate_axes_deg_s": [
+      0.3878882807651721,
+      0.4042780237715502,
+      0.836138468283898
+    ],
+    "peak_angular_accel_deg_s2": 12.420990747010686,
+    "final_kinetic_energy_j": 1.9713185381197846E-06,
+    "peak_kinetic_energy_j": 3.4166666666666673E-06,
+    "final_wheel_momentum_norm_nms": 0.0002401022113173782,
+    "peak_wheel_momentum_norm_nms": 0.0002401022113173782,
+    "peak_wheel_momentum_axes_nms": [
+      3.0379802523357672E-05,
+      8.612139129220149E-05,
+      0.00012665377175442025,
+      0.00018239536052326407
+    ],
+    "peak_wheel_momentum_utilization_pct": 0.3647907210465281,
+    "peak_wheel_speed_rpm": 34.834947869166996,
+    "peak_wheel_speed_utilization_pct": 0.5805824644861166,
+    "peak_total_ang_momentum_norm_nms": 0.0003958114029012639,
+    "peak_rw_command_nm": 0.0031848504450358206,
+    "peak_mtq_command_am2": 0.031469595128861064,
+    "peak_ext_torque_nm": 8.934366304850826E-07,
+    "peak_rw_torque_body_nm": 0.0031848504450358206,
+    "peak_rw_wheel_torque_nm": 0.0027581613926551955,
+    "initial_desired_attitude_error_deg": 95.84058248559823,
+    "final_desired_attitude_error_deg": 87.84441355709937,
+    "min_desired_attitude_error_deg": 77.85242436778623,
+    "tracker_valid_fraction": 0
+  },
+  "events": {
+    "modeChanges": [
+      {
+        "tSec": 0,
+        "modeId": 1
+      },
+      {
+        "tSec": 269.38,
+        "modeId": 2
+      },
+      {
+        "tSec": 269.39,
+        "modeId": 1
+      },
+      {
+        "tSec": 269.79,
+        "modeId": 2
+      },
+      {
+        "tSec": 269.8,
+        "modeId": 1
+      },
+      {
+        "tSec": 269.94,
+        "modeId": 2
+      },
+      {
+        "tSec": 269.96,
+        "modeId": 1
+      },
+      {
+        "tSec": 270.01,
+        "modeId": 2
+      },
+      {
+        "tSec": 270.03000000000003,
+        "modeId": 1
+      },
+      {
+        "tSec": 270.08,
+        "modeId": 2
+      },
+      {
+        "tSec": 270.09000000000003,
+        "modeId": 1
+      },
+      {
+        "tSec": 270.72,
+        "modeId": 2
+      },
+      {
+        "tSec": 270.73,
+        "modeId": 1
+      },
+      {
+        "tSec": 270.93,
+        "modeId": 2
+      },
+      {
+        "tSec": 270.94,
+        "modeId": 1
+      }
+    ]
+  },
+  "samples": [
+    {
+      "tSec": 0,
+      "positionEciKm": [
+        6870.312900000001,
+        0,
+        0
+      ],
+      "velocityEciKmps": [
+        0,
+        4.728466670572756,
+        5.974173300229503
+      ],
+      "qEciToBody": [
+        1,
+        0,
+        0,
+        0
+      ],
+      "qEstimatedEciToBody": [
+        0.9999404596344943,
+        -0.0012492816272526334,
+        0.0006768241484698233,
+        0.010819352588958733
+      ],
+      "qDesiredEciToBody": [
+        0.6678517590142752,
+        -0.23232359990038706,
+        -0.6678513728346638,
+        0.23232373256668862
+      ],
+      "omegaBodyRadS": [
+        0.01,
+        -0.005,
+        0.02
+      ],
+      "sunEci": [
+        0.797671821327912,
+        -0.5533372960966543,
+        -0.23986976092841528
+      ],
+      "moonEci": [
+        -0.17698093980121657,
+        -0.8634751669277217,
+        -0.47232232960788695
+      ],
+      "magneticFieldEciT": [
+        2.8908577565948325E-06,
+        -4.744973164138942E-06,
+        -2.4380385322380286E-05
+      ],
+      "eclipse": false,
+      "trackerValid": 0,
+      "attitudeValid": 1,
+      "modeId": 1,
+      "reactionWheelMomentumNms": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "reactionWheelCommandNm": [
+        0,
+        0,
+        0
+      ],
+      "reactionWheelTorqueBodyNm": [
+        0,
+        0,
+        0
+      ],
+      "reactionWheelTorqueWheelNm": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "magnetorquerCommandAm2": [
+        0.011602888907683928,
+        0.015360965395790797,
+        -0.0016422040350163101
+      ],
+      "externalTorqueNm": [
+        -3.782890075518131E-07,
+        2.750868584675083E-07,
+        -9.964999012066969E-08
+      ],
+      "desiredAttitudeErrorDeg": 95.84058248559823
+    },
+    {
+      "tSec": 150,
+      "positionEciKm": [
+        6775.487097676828,
+        706.0094173524715,
+        891.9949012058352
+      ],
+      "velocityEciKmps": [
+        -1.2614266315725629,
+        4.663315103263754,
+        5.89162777900922
+      ],
+      "qEciToBody": [
+        0.1615112308600131,
+        0.0842617752124366,
+        -0.674696186393445,
+        0.7152615826467086
+      ],
+      "qEstimatedEciToBody": [
+        0.16200992693345148,
+        0.08588437484974346,
+        -0.6768350633692858,
+        0.7129312412326883
+      ],
+      "qDesiredEciToBody": [
+        0.6100614116491829,
+        -0.2122146005502816,
+        -0.7210276044158748,
+        0.250817126608602
+      ],
+      "omegaBodyRadS": [
+        -0.007399256468360191,
+        -0.005912975171734511,
+        0.013531452882373575
+      ],
+      "sunEci": [
+        0.7976902371674636,
+        -0.5533149475555204,
+        -0.23986007241587223
+      ],
+      "moonEci": [
+        -0.1767369690020355,
+        -0.8635176829663609,
+        -0.4723359556421479
+      ],
+      "magneticFieldEciT": [
+        1.3484615859165614E-05,
+        -3.2101785629637318E-06,
+        -2.2421584375438238E-05
+      ],
+      "eclipse": false,
+      "trackerValid": 0,
+      "attitudeValid": 1,
+      "modeId": 1,
+      "reactionWheelMomentumNms": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "reactionWheelCommandNm": [
+        0,
+        0,
+        0
+      ],
+      "reactionWheelTorqueBodyNm": [
+        0,
+        0,
+        0
+      ],
+      "reactionWheelTorqueWheelNm": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "magnetorquerCommandAm2": [
+        -0.012365669539298922,
+        -0.015302979978838211,
+        -0.009044160543568608
+      ],
+      "externalTorqueNm": [
+        1.4324528140453576E-07,
+        1.8903896813818519E-07,
+        -5.157121365860759E-07
+      ],
+      "desiredAttitudeErrorDeg": 83.26140425770517
+    },
+    {
+      "tSec": 300,
+      "positionEciKm": [
+        6493.628078470706,
+        1392.5632963905316,
+        1759.3404062181062
+      ],
+      "velocityEciKmps": [
+        -2.4880221262814644,
+        4.469657375433656,
+        5.64627429944565
+      ],
+      "qEciToBody": [
+        0.15771685285779488,
+        0.25579646300413783,
+        0.9456911852720831,
+        -0.12394251061636652
+      ],
+      "qEstimatedEciToBody": [
+        0.16003596481034704,
+        0.25714031172065305,
+        0.9457369813491727,
+        -0.11768140109627094
+      ],
+      "qDesiredEciToBody": [
+        0.5480461780390771,
+        -0.19066359428656612,
+        -0.7692107325837212,
+        0.26759601908194225
+      ],
+      "omegaBodyRadS": [
+        -0.004700630734109624,
+        0.007808754440381274,
+        -0.013267730981323979
+      ],
+      "sunEci": [
+        0.7977086523326588,
+        -0.5532925984141319,
+        -0.23985038364311914
+      ],
+      "moonEci": [
+        -0.17649286879997333,
+        -0.8635601665015996,
+        -0.47234955921910715
+      ],
+      "magneticFieldEciT": [
+        2.2700404069713022E-05,
+        3.803764244491969E-07,
+        -1.786629404192945E-05
+      ],
+      "eclipse": false,
+      "trackerValid": 0,
+      "attitudeValid": 1,
+      "modeId": 1,
+      "reactionWheelMomentumNms": [
+        -3.0379802523357672E-05,
+        -8.612139129220149E-05,
+        0.00012665377175442025,
+        0.00018239536052326407
+      ],
+      "reactionWheelCommandNm": [
+        0,
+        0,
+        0
+      ],
+      "reactionWheelTorqueBodyNm": [
+        0,
+        0,
+        0
+      ],
+      "reactionWheelTorqueWheelNm": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "magnetorquerCommandAm2": [
+        0.02222007247139818,
+        0.015784938375939576,
+        0.001466898897189244
+      ],
+      "externalTorqueNm": [
+        3.24767022662899E-07,
+        -5.052246528028956E-07,
+        5.171407736844716E-07
+      ],
+      "desiredAttitudeErrorDeg": 87.84441355709937
+    }
+  ]
+}

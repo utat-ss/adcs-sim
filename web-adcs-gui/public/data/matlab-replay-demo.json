@@ -1,0 +1,2358 @@
+{
+  "schema": "utat.adcs.replay.v1",
+  "provenance": {
+    "source": "MATLAB/Simulink",
+    "model": "adcs_sim demo export",
+    "gitBranch": "simulink",
+    "gitCommit": "demo0000",
+    "generatedAtUtc": "2026-09-20T14:40:00Z",
+    "matlabVersion": "R2026a",
+    "simStopTimeSec": 960,
+    "simFixedStepSec": 0.1,
+    "notes": [
+      "Synthetic demo file for browser replay UI tests; replace with integration exporter output for analysis."
+    ]
+  },
+  "frames": {
+    "position": "ECI",
+    "velocity": "ECI",
+    "attitudeQuaternion": "scalar-first ECI-to-body passive DCM convention; renderer maps body axes into Three.js scene coordinates",
+    "angularRate": "body",
+    "units": {
+      "position": "km",
+      "velocity": "km/s",
+      "angularRate": "rad/s",
+      "wheelMomentum": "N*m*s",
+      "torque": "N*m",
+      "magneticField": "T"
+    }
+  },
+  "spacecraft": {
+    "name": "UTAT ADCS CubeSat",
+    "dimensionsM": [
+      0.1,
+      0.1,
+      0.3
+    ],
+    "cameraHalfAngleDeg": 8,
+    "sensorBoresightsBody": [
+      {
+        "id": "camera",
+        "kind": "conic",
+        "axisBody": [
+          0,
+          0,
+          1
+        ],
+        "halfAngleDeg": 8
+      },
+      {
+        "id": "star_tracker",
+        "kind": "boresight",
+        "axisBody": [
+          0,
+          0,
+          1
+        ],
+        "exclusionDeg": {
+          "sun": 45,
+          "moon": 25
+        }
+      }
+    ]
+  },
+  "samples": [
+    {
+      "tSec": 0,
+      "utc": "2026-06-01T12:00:00Z",
+      "positionEciKm": [
+        6871,
+        0,
+        0
+      ],
+      "velocityEciKmS": [
+        0,
+        4.73100984,
+        5.96904887
+      ],
+      "qEciToBody": [
+        0.6677749354,
+        -0.232543836,
+        -0.6677749354,
+        0.232543836
+      ],
+      "omegaBodyRadS": [
+        0.02,
+        -0.005,
+        0.012
+      ],
+      "wheelMomentumNms": [
+        0,
+        0,
+        0,
+        -0.001
+      ],
+      "rwTorqueBodyNm": [
+        0,
+        -0.0006,
+        0
+      ],
+      "rwTauWheelsNm": [
+        0,
+        0.00084147,
+        0.0009093,
+        0.00014112
+      ],
+      "mtqDipoleAm2": [
+        0,
+        0.02,
+        0
+      ],
+      "sunEci": [
+        0.221,
+        -0.902,
+        0.371
+      ],
+      "moonEci": [
+        -0.52,
+        0.62,
+        0.58
+      ],
+      "bEciT": [
+        0,
+        0,
+        3.1E-05
+      ],
+      "eclipse": false,
+      "mode": "detumble",
+      "quality": {
+        "attitudeValid": true,
+        "starTrackerValid": true,
+        "sampleSource": "demo-logged"
+      }
+    },
+    {
+      "tSec": 30,
+      "utc": "2026-06-01T12:00:30Z",
+      "positionEciKm": [
+        6856.288662,
+        279.134434,
+        352.180007
+      ],
+      "velocityEciKmS": [
+        -0.49814691,
+        4.72088038,
+        5.95626868
+      ],
+      "qEciToBody": [
+        0.6455684169,
+        -0.2248107081,
+        -0.6892663837,
+        0.2400279502
+      ],
+      "omegaBodyRadS": [
+        0.01871014,
+        -0.00498929,
+        0.01146676
+      ],
+      "wheelMomentumNms": [
+        0.002,
+        -0.0015,
+        6.5E-05,
+        -0.000998
+      ],
+      "rwTorqueBodyNm": [
+        5.232E-05,
+        -0.00059872,
+        6.526E-05
+      ],
+      "rwTauWheelsNm": [
+        6.54E-05,
+        0.00087501,
+        0.00088013,
+        7.607E-05
+      ],
+      "mtqDipoleAm2": [
+        0.001962,
+        0.019957,
+        0
+      ],
+      "sunEci": [
+        0.221,
+        -0.902,
+        0.371
+      ],
+      "moonEci": [
+        -0.52,
+        0.62,
+        0.58
+      ],
+      "bEciT": [
+        0,
+        0,
+        3.1E-05
+      ],
+      "eclipse": false,
+      "mode": "detumble",
+      "quality": {
+        "attitudeValid": true,
+        "starTrackerValid": true,
+        "sampleSource": "demo-logged"
+      }
+    },
+    {
+      "tSec": 60,
+      "utc": "2026-06-01T12:01:00Z",
+      "positionEciKm": [
+        6812.217642,
+        557.073571,
+        702.851925
+      ],
+      "velocityEciKmS": [
+        -0.99416068,
+        4.69053539,
+        5.91798283
+      ],
+      "qEciToBody": [
+        0.6226706076,
+        -0.2168368473,
+        -0.7100197484,
+        0.2472550364
+      ],
+      "omegaBodyRadS": [
+        0.01750347,
+        -0.00495722,
+        0.01095721
+      ],
+      "wheelMomentumNms": [
+        0.004,
+        -0.003,
+        0.000131,
+        -0.000991
+      ],
+      "rwTorqueBodyNm": [
+        0.00010442,
+        -0.00059487,
+        0.00012941
+      ],
+      "rwTauWheelsNm": [
+        0.00013053,
+        0.0009048,
+        0.0008472,
+        1.069E-05
+      ],
+      "mtqDipoleAm2": [
+        0.003916,
+        0.019829,
+        0
+      ],
+      "sunEci": [
+        0.221,
+        -0.902,
+        0.371
+      ],
+      "moonEci": [
+        -0.52,
+        0.62,
+        0.58
+      ],
+      "bEciT": [
+        0,
+        0,
+        3.1E-05
+      ],
+      "eclipse": false,
+      "mode": "detumble",
+      "quality": {
+        "attitudeValid": true,
+        "starTrackerValid": true,
+        "sampleSource": "demo-logged"
+      }
+    },
+    {
+      "tSec": 90,
+      "utc": "2026-06-01T12:01:30Z",
+      "positionEciKm": [
+        6738.975662,
+        832.627234,
+        1050.514123
+      ],
+      "velocityEciKmS": [
+        -1.4859173,
+        4.64010481,
+        5.85435527
+      ],
+      "qEciToBody": [
+        0.599106027,
+        -0.2086307921,
+        -0.7300128061,
+        0.2542173557
+      ],
+      "omegaBodyRadS": [
+        0.01637462,
+        -0.00490393,
+        0.0104703
+      ],
+      "wheelMomentumNms": [
+        0.006,
+        -0.0045,
+        0.000195,
+        -0.000981
+      ],
+      "rwTorqueBodyNm": [
+        0.00015607,
+        -0.00058847,
+        0.00019134
+      ],
+      "rwTauWheelsNm": [
+        0.00019509,
+        0.00093071,
+        0.00081064,
+        -5.473E-05
+      ],
+      "mtqDipoleAm2": [
+        0.005853,
+        0.019616,
+        0
+      ],
+      "sunEci": [
+        0.221,
+        -0.902,
+        0.371
+      ],
+      "moonEci": [
+        -0.52,
+        0.62,
+        0.58
+      ],
+      "bEciT": [
+        0,
+        0,
+        3.1E-05
+      ],
+      "eclipse": false,
+      "mode": "detumble",
+      "quality": {
+        "attitudeValid": true,
+        "starTrackerValid": true,
+        "sampleSource": "demo-logged"
+      }
+    },
+    {
+      "tSec": 120,
+      "utc": "2026-06-01T12:02:00Z",
+      "positionEciKm": [
+        6636.876352,
+        1104.615459,
+        1393.677858
+      ],
+      "velocityEciKmS": [
+        -1.97131099,
+        4.56980459,
+        5.76565846
+      ],
+      "qEciToBody": [
+        0.5748999087,
+        -0.2002013298,
+        -0.7492241478,
+        0.2609074527
+      ],
+      "omegaBodyRadS": [
+        0.01531857,
+        -0.00482963,
+        0.01000504
+      ],
+      "wheelMomentumNms": [
+        0.008,
+        -0.006,
+        0.000259,
+        -0.000966
+      ],
+      "rwTorqueBodyNm": [
+        0.00020706,
+        -0.00057956,
+        0.00025
+      ],
+      "rwTauWheelsNm": [
+        0.00025882,
+        0.00095264,
+        0.00077061,
+        -0.00011992
+      ],
+      "mtqDipoleAm2": [
+        0.007765,
+        0.019319,
+        0
+      ],
+      "sunEci": [
+        0.221,
+        -0.902,
+        0.371
+      ],
+      "moonEci": [
+        -0.52,
+        0.62,
+        0.58
+      ],
+      "bEciT": [
+        0,
+        0,
+        3.1E-05
+      ],
+      "eclipse": false,
+      "mode": "detumble",
+      "quality": {
+        "attitudeValid": true,
+        "starTrackerValid": true,
+        "sampleSource": "demo-logged"
+      }
+    },
+    {
+      "tSec": 150,
+      "utc": "2026-06-01T12:02:30Z",
+      "positionEciKm": [
+        6506.35692,
+        1371.873551,
+        1730.87365
+      ],
+      "velocityEciKmS": [
+        -2.44826323,
+        4.47993576,
+        5.65227222
+      ],
+      "qEciToBody": [
+        0.5500781731,
+        -0.191557487,
+        -0.7676332016,
+        0.2673181635
+      ],
+      "omegaBodyRadS": [
+        0.01433063,
+        -0.00473465,
+        0.00956044
+      ],
+      "wheelMomentumNms": [
+        0.01,
+        -0.0075,
+        0.000321,
+        -0.000947
+      ],
+      "rwTorqueBodyNm": [
+        0.00025715,
+        -0.00056816,
+        0.00030438
+      ],
+      "rwTauWheelsNm": [
+        0.00032144,
+        0.00097049,
+        0.00072728,
+        -0.00018459
+      ],
+      "mtqDipoleAm2": [
+        0.009643,
+        0.018939,
+        0
+      ],
+      "sunEci": [
+        0.221,
+        -0.902,
+        0.371
+      ],
+      "moonEci": [
+        -0.52,
+        0.62,
+        0.58
+      ],
+      "bEciT": [
+        0,
+        0,
+        3.1E-05
+      ],
+      "eclipse": false,
+      "mode": "detumble",
+      "quality": {
+        "attitudeValid": true,
+        "starTrackerValid": true,
+        "sampleSource": "demo-logged"
+      }
+    },
+    {
+      "tSec": 180,
+      "utc": "2026-06-01T12:03:00Z",
+      "positionEciKm": [
+        6347.976268,
+        1633.25707,
+        2060.657576
+      ],
+      "velocityEciKmS": [
+        -2.91473163,
+        4.37088316,
+        5.51468208
+      ],
+      "qEciToBody": [
+        0.5246674001,
+        -0.1827085196,
+        -0.7852202544,
+        0.2734426233
+      ],
+      "omegaBodyRadS": [
+        0.0134064,
+        -0.0046194,
+        0.0091356
+      ],
+      "wheelMomentumNms": [
+        0.012,
+        -0.009,
+        0.000383,
+        -0.000924
+      ],
+      "rwTorqueBodyNm": [
+        0.00030615,
+        -0.00055433,
+        0.00035355
+      ],
+      "rwTauWheelsNm": [
+        0.00038268,
+        0.00098418,
+        0.00068083,
+        -0.00024848
+      ],
+      "mtqDipoleAm2": [
+        0.011481,
+        0.018478,
+        0
+      ],
+      "sunEci": [
+        0.221,
+        -0.902,
+        0.371
+      ],
+      "moonEci": [
+        -0.52,
+        0.62,
+        0.58
+      ],
+      "bEciT": [
+        0,
+        0,
+        3.1E-05
+      ],
+      "eclipse": false,
+      "mode": "detumble",
+      "quality": {
+        "attitudeValid": true,
+        "starTrackerValid": true,
+        "sampleSource": "demo-logged"
+      }
+    },
+    {
+      "tSec": 210,
+      "utc": "2026-06-01T12:03:30Z",
+      "positionEciKm": [
+        6162.412607,
+        1887.646731,
+        2381.61745
+      ],
+      "velocityEciKmS": [
+        -3.3687187,
+        4.24311376,
+        5.35347723
+      ],
+      "qEciToBody": [
+        -0.4986948,
+        0.1736639033,
+        0.8019664738,
+        -0.2792742738
+      ],
+      "omegaBodyRadS": [
+        0.01254178,
+        -0.00448436,
+        0.00872965
+      ],
+      "wheelMomentumNms": [
+        0.014,
+        -0.0105,
+        0.000442,
+        -0.000897
+      ],
+      "rwTorqueBodyNm": [
+        0.00035383,
+        -0.00053812,
+        0.00039668
+      ],
+      "rwTauWheelsNm": [
+        0.00044229,
+        0.00099366,
+        0.00063147,
+        -0.0003113
+      ],
+      "mtqDipoleAm2": [
+        0.013269,
+        0.017937,
+        0
+      ],
+      "sunEci": [
+        0.221,
+        -0.902,
+        0.371
+      ],
+      "moonEci": [
+        -0.52,
+        0.62,
+        0.58
+      ],
+      "bEciT": [
+        0,
+        0,
+        3.1E-05
+      ],
+      "eclipse": false,
+      "mode": "target-track",
+      "quality": {
+        "attitudeValid": true,
+        "starTrackerValid": true,
+        "sampleSource": "demo-logged"
+      }
+    },
+    {
+      "tSec": 240,
+      "utc": "2026-06-01T12:04:00Z",
+      "positionEciKm": [
+        5950.460549,
+        2133.953199,
+        2692.378873
+      ],
+      "velocityEciKmS": [
+        -3.8082804,
+        4.09717471,
+        5.16934796
+      ],
+      "qEciToBody": [
+        -0.4721881851,
+        0.1644333234,
+        0.8178539274,
+        -0.2848068705
+      ],
+      "omegaBodyRadS": [
+        0.01173292,
+        -0.00433013,
+        0.00834173
+      ],
+      "wheelMomentumNms": [
+        0.016,
+        -0.012,
+        0.0005,
+        -0.000866
+      ],
+      "rwTorqueBodyNm": [
+        0.0004,
+        -0.00051962,
+        0.00043301
+      ],
+      "rwTauWheelsNm": [
+        0.0005,
+        0.00099889,
+        0.0005794,
+        -0.00037278
+      ],
+      "mtqDipoleAm2": [
+        0.015,
+        0.017321,
+        0
+      ],
+      "sunEci": [
+        0.221,
+        -0.902,
+        0.371
+      ],
+      "moonEci": [
+        -0.52,
+        0.62,
+        0.58
+      ],
+      "bEciT": [
+        0,
+        0,
+        3.1E-05
+      ],
+      "eclipse": false,
+      "mode": "target-track",
+      "quality": {
+        "attitudeValid": true,
+        "starTrackerValid": true,
+        "sampleSource": "demo-logged"
+      }
+    },
+    {
+      "tSec": 270,
+      "utc": "2026-06-01T12:04:30Z",
+      "positionEciKm": [
+        5713.027706,
+        2371.121752,
+        2991.611115
+      ],
+      "velocityEciKmS": [
+        -4.23153446,
+        3.93369092,
+        4.96308275
+      ],
+      "qEciToBody": [
+        -0.4451759393,
+        0.1550266641,
+        0.8328656025,
+        -0.2900344889
+      ],
+      "omegaBodyRadS": [
+        0.01097623,
+        -0.00415735,
+        0.00797105
+      ],
+      "wheelMomentumNms": [
+        0.018,
+        -0.0135,
+        0.000556,
+        -0.000831
+      ],
+      "rwTorqueBodyNm": [
+        0.00044446,
+        -0.00049888,
+        0.00046194
+      ],
+      "rwTauWheelsNm": [
+        0.00055557,
+        0.00099983,
+        0.00052485,
+        -0.00043267
+      ],
+      "mtqDipoleAm2": [
+        0.016667,
+        0.016629,
+        0
+      ],
+      "sunEci": [
+        0.221,
+        -0.902,
+        0.371
+      ],
+      "moonEci": [
+        -0.52,
+        0.62,
+        0.58
+      ],
+      "bEciT": [
+        0,
+        0,
+        3.1E-05
+      ],
+      "eclipse": false,
+      "mode": "target-track",
+      "quality": {
+        "attitudeValid": true,
+        "starTrackerValid": true,
+        "sampleSource": "demo-logged"
+      }
+    },
+    {
+      "tSec": 300,
+      "utc": "2026-06-01T12:05:00Z",
+      "positionEciKm": [
+        5451.130801,
+        2598.136798,
+        3278.03282
+      ],
+      "velocityEciKmS": [
+        -4.63666844,
+        3.75336246,
+        4.73556486
+      ],
+      "qEciToBody": [
+        -0.4176869879,
+        0.1454539984,
+        0.8469854242,
+        -0.2949515311
+      ],
+      "omegaBodyRadS": [
+        0.01026834,
+        -0.00396677,
+        0.00761684
+      ],
+      "wheelMomentumNms": [
+        0.02,
+        -0.015,
+        0.000609,
+        -0.000793
+      ],
+      "rwTorqueBodyNm": [
+        0.00048701,
+        -0.00047601,
+        0.00048296
+      ],
+      "rwTauWheelsNm": [
+        0.00060876,
+        0.0009965,
+        0.00046806,
+        -0.00049071
+      ],
+      "mtqDipoleAm2": [
+        0.018263,
+        0.015867,
+        0
+      ],
+      "sunEci": [
+        0.221,
+        -0.902,
+        0.371
+      ],
+      "moonEci": [
+        -0.52,
+        0.62,
+        0.58
+      ],
+      "bEciT": [
+        0,
+        0,
+        3.1E-05
+      ],
+      "eclipse": false,
+      "mode": "target-track",
+      "quality": {
+        "attitudeValid": true,
+        "starTrackerValid": true,
+        "sampleSource": "demo-logged"
+      }
+    },
+    {
+      "tSec": 330,
+      "utc": "2026-06-01T12:05:30Z",
+      "positionEciKm": [
+        5165.891317,
+        2814.026223,
+        3550.417485
+      ],
+      "velocityEciKmS": [
+        -5.02194749,
+        3.55696153,
+        4.48776855
+      ],
+      "qEciToBody": [
+        -0.3897507668,
+        0.135725577,
+        0.8601982728,
+        -0.2995527317
+      ],
+      "omegaBodyRadS": [
+        0.00960611,
+        -0.0037592,
+        0.00727837
+      ],
+      "wheelMomentumNms": [
+        0.022,
+        -0.0165,
+        0.000659,
+        -0.000752
+      ],
+      "rwTorqueBodyNm": [
+        0.00052748,
+        -0.0004511,
+        0.00049572
+      ],
+      "rwTauWheelsNm": [
+        0.00065935,
+        0.0009889,
+        0.00040926,
+        -0.00054665
+      ],
+      "mtqDipoleAm2": [
+        0.01978,
+        0.015037,
+        0
+      ],
+      "sunEci": [
+        0.221,
+        -0.902,
+        0.371
+      ],
+      "moonEci": [
+        -0.52,
+        0.62,
+        0.58
+      ],
+      "bEciT": [
+        0,
+        0,
+        3.1E-05
+      ],
+      "eclipse": false,
+      "mode": "target-track",
+      "quality": {
+        "attitudeValid": true,
+        "starTrackerValid": true,
+        "sampleSource": "demo-logged"
+      }
+    },
+    {
+      "tSec": 360,
+      "utc": "2026-06-01T12:06:00Z",
+      "positionEciKm": [
+        4858.530694,
+        3017.865556,
+        3807.598717
+      ],
+      "velocityEciKmS": [
+        -5.3857218,
+        3.34532914,
+        4.22075493
+      ],
+      "qEciToBody": [
+        -0.3613971908,
+        0.1258518172,
+        0.8724899994,
+        -0.3038331638
+      ],
+      "omegaBodyRadS": [
+        0.00898658,
+        -0.00353553,
+        0.00695494
+      ],
+      "wheelMomentumNms": [
+        0.024,
+        -0.018,
+        0.000707,
+        -0.000707
+      ],
+      "rwTorqueBodyNm": [
+        0.00056569,
+        -0.00042426,
+        0.0005
+      ],
+      "rwTauWheelsNm": [
+        0.00070711,
+        0.00097706,
+        0.00034871,
+        -0.00060024
+      ],
+      "mtqDipoleAm2": [
+        0.021213,
+        0.014142,
+        0
+      ],
+      "sunEci": [
+        0.221,
+        -0.902,
+        0.371
+      ],
+      "moonEci": [
+        -0.52,
+        0.62,
+        0.58
+      ],
+      "bEciT": [
+        0,
+        0,
+        3.1E-05
+      ],
+      "eclipse": false,
+      "mode": "target-track",
+      "quality": {
+        "attitudeValid": true,
+        "starTrackerValid": false,
+        "sampleSource": "demo-logged"
+      }
+    },
+    {
+      "tSec": 390,
+      "utc": "2026-06-01T12:06:30Z",
+      "positionEciKm": [
+        4530.365096,
+        3208.781925,
+        4048.475227
+      ],
+      "velocityEciKmS": [
+        -5.72643361,
+        3.11937154,
+        3.93566739
+      ],
+      "qEciToBody": [
+        -0.3326566217,
+        0.1158432921,
+        0.883847442,
+        -0.3077882438
+      ],
+      "omegaBodyRadS": [
+        0.00840701,
+        -0.00329673,
+        0.00664588
+      ],
+      "wheelMomentumNms": [
+        0.026,
+        -0.0195,
+        0.000752,
+        -0.000659
+      ],
+      "rwTorqueBodyNm": [
+        0.00060147,
+        -0.00039561,
+        0.00049572
+      ],
+      "rwTauWheelsNm": [
+        0.00075184,
+        0.00096104,
+        0.00028667,
+        -0.00065127
+      ],
+      "mtqDipoleAm2": [
+        0.022555,
+        0.013187,
+        0
+      ],
+      "sunEci": [
+        0.221,
+        -0.902,
+        0.371
+      ],
+      "moonEci": [
+        -0.52,
+        0.62,
+        0.58
+      ],
+      "bEciT": [
+        0,
+        0,
+        3.1E-05
+      ],
+      "eclipse": false,
+      "mode": "target-track",
+      "quality": {
+        "attitudeValid": true,
+        "starTrackerValid": false,
+        "sampleSource": "demo-logged"
+      }
+    },
+    {
+      "tSec": 420,
+      "utc": "2026-06-01T12:07:00Z",
+      "positionEciKm": [
+        4182.799779,
+        3385.957797,
+        4272.015544
+      ],
+      "velocityEciKmS": [
+        -6.04262396,
+        2.88005631,
+        3.63372672
+      ],
+      "qEciToBody": [
+        -0.3035598355,
+        0.1057107191,
+        0.8942584386,
+        -0.3114137364
+      ],
+      "omegaBodyRadS": [
+        0.00786481,
+        -0.00304381,
+        0.00635056
+      ],
+      "wheelMomentumNms": [
+        0.028,
+        -0.021,
+        0.000793,
+        -0.000609
+      ],
+      "rwTorqueBodyNm": [
+        0.00063468,
+        -0.00036526,
+        0.00048296
+      ],
+      "rwTauWheelsNm": [
+        0.00079335,
+        0.00094091,
+        0.00022339,
+        -0.00069951
+      ],
+      "mtqDipoleAm2": [
+        0.023801,
+        0.012175,
+        0
+      ],
+      "sunEci": [
+        0.221,
+        -0.902,
+        0.371
+      ],
+      "moonEci": [
+        -0.52,
+        0.62,
+        0.58
+      ],
+      "bEciT": [
+        0,
+        0,
+        3.1E-05
+      ],
+      "eclipse": true,
+      "mode": "target-track",
+      "quality": {
+        "attitudeValid": true,
+        "starTrackerValid": false,
+        "sampleSource": "demo-logged"
+      }
+    },
+    {
+      "tSec": 450,
+      "utc": "2026-06-01T12:07:30Z",
+      "positionEciKm": [
+        3817.323071,
+        3548.634478,
+        4477.262435
+      ],
+      "velocityEciKmS": [
+        -6.33293886,
+        2.62840824,
+        3.31622587
+      ],
+      "qEciToBody": [
+        -0.2741379898,
+        0.0954649484,
+        0.9037118408,
+        -0.3147057593
+      ],
+      "omegaBodyRadS": [
+        0.00735759,
+        -0.00277785,
+        0.00606836
+      ],
+      "wheelMomentumNms": [
+        0.03,
+        -0.0225,
+        0.000831,
+        -0.000556
+      ],
+      "rwTorqueBodyNm": [
+        0.00066518,
+        -0.00033334,
+        0.00046194
+      ],
+      "rwTauWheelsNm": [
+        0.00083147,
+        0.00091674,
+        0.00015917,
+        -0.00074475
+      ],
+      "mtqDipoleAm2": [
+        0.024944,
+        0.011111,
+        0
+      ],
+      "sunEci": [
+        0.221,
+        -0.902,
+        0.371
+      ],
+      "moonEci": [
+        -0.52,
+        0.62,
+        0.58
+      ],
+      "bEciT": [
+        0,
+        0,
+        3.1E-05
+      ],
+      "eclipse": true,
+      "mode": "target-track",
+      "quality": {
+        "attitudeValid": true,
+        "starTrackerValid": false,
+        "sampleSource": "demo-logged"
+      }
+    },
+    {
+      "tSec": 480,
+      "utc": "2026-06-01T12:08:00Z",
+      "positionEciKm": [
+        3435.5,
+        3696.115362,
+        4663.337001
+      ],
+      "velocityEciKmS": [
+        -6.59613515,
+        2.36550492,
+        2.98452444
+      ],
+      "qEciToBody": [
+        -0.2444225904,
+        0.0851169515,
+        0.9121975257,
+        -0.3176607875
+      ],
+      "omegaBodyRadS": [
+        0.00688308,
+        -0.0025,
+        0.0057987
+      ],
+      "wheelMomentumNms": [
+        0.032,
+        -0.024,
+        0.000866,
+        -0.0005
+      ],
+      "rwTorqueBodyNm": [
+        0.00069282,
+        -0.0003,
+        0.00043301
+      ],
+      "rwTauWheelsNm": [
+        0.00086603,
+        0.00088865,
+        9.425E-05,
+        -0.0007868
+      ],
+      "mtqDipoleAm2": [
+        0.025981,
+        0.01,
+        0
+      ],
+      "sunEci": [
+        0.221,
+        -0.902,
+        0.371
+      ],
+      "moonEci": [
+        -0.52,
+        0.62,
+        0.58
+      ],
+      "bEciT": [
+        0,
+        0,
+        3.1E-05
+      ],
+      "eclipse": true,
+      "mode": "target-track",
+      "quality": {
+        "attitudeValid": true,
+        "starTrackerValid": true,
+        "sampleSource": "demo-logged"
+      }
+    },
+    {
+      "tSec": 510,
+      "utc": "2026-06-01T12:08:30Z",
+      "positionEciKm": [
+        3038.96559,
+        3827.768912,
+        4829.442442
+      ],
+      "velocityEciKmS": [
+        -6.83108577,
+        2.09247214,
+        2.64004281
+      ],
+      "qEciToBody": [
+        -0.2144454571,
+        0.0746778092,
+        0.9197064067,
+        -0.3202756565
+      ],
+      "omegaBodyRadS": [
+        0.00643917,
+        -0.00221144,
+        0.00554102
+      ],
+      "wheelMomentumNms": [
+        0.034,
+        -0.0255,
+        0.000897,
+        -0.000442
+      ],
+      "rwTorqueBodyNm": [
+        0.0007175,
+        -0.00026537,
+        0.00039668
+      ],
+      "rwTauWheelsNm": [
+        0.00089687,
+        0.00085676,
+        2.894E-05,
+        -0.00082548
+      ],
+      "mtqDipoleAm2": [
+        0.026906,
+        0.008846,
+        0
+      ],
+      "sunEci": [
+        0.221,
+        -0.902,
+        0.371
+      ],
+      "moonEci": [
+        -0.52,
+        0.62,
+        0.58
+      ],
+      "bEciT": [
+        0,
+        0,
+        3.1E-05
+      ],
+      "eclipse": true,
+      "mode": "target-track",
+      "quality": {
+        "attitudeValid": true,
+        "starTrackerValid": true,
+        "sampleSource": "demo-logged"
+      }
+    },
+    {
+      "tSec": 540,
+      "utc": "2026-06-01T12:09:00Z",
+      "positionEciKm": [
+        2629.417864,
+        3943.031368,
+        4974.867468
+      ],
+      "velocityEciKmS": [
+        -7.03678464,
+        1.81047908,
+        2.28425611
+      ],
+      "qEciToBody": [
+        -0.1842386902,
+        0.0641587,
+        0.9262304431,
+        -0.3225475663
+      ],
+      "omegaBodyRadS": [
+        0.00602388,
+        -0.00191342,
+        0.0052948
+      ],
+      "wheelMomentumNms": [
+        0.036,
+        -0.027,
+        0.000924,
+        -0.000383
+      ],
+      "rwTorqueBodyNm": [
+        0.0007391,
+        -0.00022961,
+        0.00035355
+      ],
+      "rwTauWheelsNm": [
+        0.00092388,
+        0.00082119,
+        -3.65E-05,
+        -0.00086063
+      ],
+      "mtqDipoleAm2": [
+        0.027716,
+        0.007654,
+        0
+      ],
+      "sunEci": [
+        0.221,
+        -0.902,
+        0.371
+      ],
+      "moonEci": [
+        -0.52,
+        0.62,
+        0.58
+      ],
+      "bEciT": [
+        0,
+        0,
+        3.1E-05
+      ],
+      "eclipse": true,
+      "mode": "target-track",
+      "quality": {
+        "attitudeValid": true,
+        "starTrackerValid": true,
+        "sampleSource": "demo-logged"
+      }
+    },
+    {
+      "tSec": 570,
+      "utc": "2026-06-01T12:09:30Z",
+      "positionEciKm": [
+        2208.610566,
+        4041.409158,
+        5098.989349
+      ],
+      "velocityEciKmS": [
+        -7.21235091,
+        1.52073327,
+        1.91868788
+      ],
+      "qEciToBody": [
+        -0.1538346359,
+        0.0535708881,
+        0.9317626487,
+        -0.3244740841
+      ],
+      "omegaBodyRadS": [
+        0.00563539,
+        -0.0016072,
+        0.00505951
+      ],
+      "wheelMomentumNms": [
+        0.038,
+        -0.0285,
+        0.000947,
+        -0.000321
+      ],
+      "rwTorqueBodyNm": [
+        0.00075754,
+        -0.00019286,
+        0.00030438
+      ],
+      "rwTauWheelsNm": [
+        0.00094693,
+        0.00078211,
+        -0.00010178,
+        -0.00089209
+      ],
+      "mtqDipoleAm2": [
+        0.028408,
+        0.006429,
+        0
+      ],
+      "sunEci": [
+        0.221,
+        -0.902,
+        0.371
+      ],
+      "moonEci": [
+        -0.52,
+        0.62,
+        0.58
+      ],
+      "bEciT": [
+        0,
+        0,
+        3.1E-05
+      ],
+      "eclipse": true,
+      "mode": "target-track",
+      "quality": {
+        "attitudeValid": true,
+        "starTrackerValid": true,
+        "sampleSource": "demo-logged"
+      }
+    },
+    {
+      "tSec": 600,
+      "utc": "2026-06-01T12:10:00Z",
+      "positionEciKm": [
+        1778.345659,
+        4122.481014,
+        5201.276574
+      ],
+      "velocityEciKmS": [
+        -7.35703279,
+        1.22447545,
+        1.54490353
+      ],
+      "qEciToBody": [
+        -0.1232658516,
+        0.0429257111,
+        0.9362970995,
+        -0.326053147
+      ],
+      "omegaBodyRadS": [
+        0.00527194,
+        -0.0012941,
+        0.00483468
+      ],
+      "wheelMomentumNms": [
+        0.04,
+        -0.03,
+        0.000966,
+        -0.000259
+      ],
+      "rwTorqueBodyNm": [
+        0.00077274,
+        -0.00015529,
+        0.00025
+      ],
+      "rwTauWheelsNm": [
+        0.00096593,
+        0.00073968,
+        -0.00016662,
+        -0.00091973
+      ],
+      "mtqDipoleAm2": [
+        0.028978,
+        0.005176,
+        0
+      ],
+      "sunEci": [
+        0.221,
+        -0.902,
+        0.371
+      ],
+      "moonEci": [
+        -0.52,
+        0.62,
+        0.58
+      ],
+      "bEciT": [
+        0,
+        0,
+        3.1E-05
+      ],
+      "eclipse": false,
+      "mode": "target-track",
+      "quality": {
+        "attitudeValid": true,
+        "starTrackerValid": true,
+        "sampleSource": "demo-logged"
+      }
+    },
+    {
+      "tSec": 630,
+      "utc": "2026-06-01T12:10:30Z",
+      "positionEciKm": [
+        1340.465603,
+        4185.899774,
+        5281.291135
+      ],
+      "velocityEciKmS": [
+        -7.47021073,
+        0.92297423,
+        1.16450367
+      ],
+      "qEciToBody": [
+        -0.0925650712,
+        0.0322345683,
+        0.9398289399,
+        -0.3272830639
+      ],
+      "omegaBodyRadS": [
+        0.00493194,
+        -0.00097545,
+        0.00461985
+      ],
+      "wheelMomentumNms": [
+        0.042,
+        -0.0315,
+        0.000981,
+        -0.000195
+      ],
+      "rwTorqueBodyNm": [
+        0.00078463,
+        -0.00011705,
+        0.00019134
+      ],
+      "rwTauWheelsNm": [
+        0.00098079,
+        0.00069408,
+        -0.00023076,
+        -0.00094344
+      ],
+      "mtqDipoleAm2": [
+        0.029424,
+        0.003902,
+        0
+      ],
+      "sunEci": [
+        0.221,
+        -0.902,
+        0.371
+      ],
+      "moonEci": [
+        -0.52,
+        0.62,
+        0.58
+      ],
+      "bEciT": [
+        0,
+        0,
+        3.1E-05
+      ],
+      "eclipse": false,
+      "mode": "target-track",
+      "quality": {
+        "attitudeValid": true,
+        "starTrackerValid": true,
+        "sampleSource": "demo-logged"
+      }
+    },
+    {
+      "tSec": 660,
+      "utc": "2026-06-01T12:11:00Z",
+      "positionEciKm": [
+        896.845467,
+        4231.393867,
+        5338.690396
+      ],
+      "velocityEciKmS": [
+        -7.55140007,
+        0.6175207,
+        0.77911722
+      ],
+      "qEciToBody": [
+        -0.0617651698,
+        0.0215089078,
+        0.9423543879,
+        -0.328162518
+      ],
+      "omegaBodyRadS": [
+        0.00461386,
+        -0.00065263,
+        0.00441455
+      ],
+      "wheelMomentumNms": [
+        0.044,
+        -0.033,
+        0.000991,
+        -0.000131
+      ],
+      "rwTorqueBodyNm": [
+        0.00079316,
+        -7.832E-05,
+        0.00012941
+      ],
+      "rwTauWheelsNm": [
+        0.00099144,
+        0.00064551,
+        -0.0002939,
+        -0.0009631
+      ],
+      "mtqDipoleAm2": [
+        0.029743,
+        0.002611,
+        0
+      ],
+      "sunEci": [
+        0.221,
+        -0.902,
+        0.371
+      ],
+      "moonEci": [
+        -0.52,
+        0.62,
+        0.58
+      ],
+      "bEciT": [
+        0,
+        0,
+        3.1E-05
+      ],
+      "eclipse": false,
+      "mode": "target-track",
+      "quality": {
+        "attitudeValid": true,
+        "starTrackerValid": true,
+        "sampleSource": "demo-logged"
+      }
+    },
+    {
+      "tSec": 690,
+      "utc": "2026-06-01T12:11:30Z",
+      "positionEciKm": [
+        449.384901,
+        4258.768483,
+        5373.228566
+      ],
+      "velocityEciKmS": [
+        -7.60025316,
+        0.30942285,
+        0.39039447
+      ],
+      "qEciToBody": [
+        -0.0308991287,
+        0.0107602151,
+        0.9438707393,
+        -0.3286905674
+      ],
+      "omegaBodyRadS": [
+        0.0043163,
+        -0.00032702,
+        0.00421838
+      ],
+      "wheelMomentumNms": [
+        0.046,
+        -0.0345,
+        0.000998,
+        -6.5E-05
+      ],
+      "rwTorqueBodyNm": [
+        0.00079829,
+        -3.924E-05,
+        6.526E-05
+      ],
+      "rwTauWheelsNm": [
+        0.00099786,
+        0.00059418,
+        -0.00035578,
+        -0.00097864
+      ],
+      "mtqDipoleAm2": [
+        0.029936,
+        0.001308,
+        0
+      ],
+      "sunEci": [
+        0.221,
+        -0.902,
+        0.371
+      ],
+      "moonEci": [
+        -0.52,
+        0.62,
+        0.58
+      ],
+      "bEciT": [
+        0,
+        0,
+        3.1E-05
+      ],
+      "eclipse": false,
+      "mode": "target-track",
+      "quality": {
+        "attitudeValid": true,
+        "starTrackerValid": true,
+        "sampleSource": "demo-logged"
+      }
+    },
+    {
+      "tSec": 720,
+      "utc": "2026-06-01T12:12:00Z",
+      "positionEciKm": [
+        0,
+        4267.906398,
+        5384.757745
+      ],
+      "velocityEciKmS": [
+        -7.61656081,
+        0,
+        0
+      ],
+      "qEciToBody": [
+        0,
+        0,
+        0.9443763702,
+        -0.3288666467
+      ],
+      "omegaBodyRadS": [
+        0.00403793,
+        0,
+        0.00403093
+      ],
+      "wheelMomentumNms": [
+        0.048,
+        -0.036,
+        0.001,
+        0
+      ],
+      "rwTorqueBodyNm": [
+        0.0008,
+        0,
+        0
+      ],
+      "rwTauWheelsNm": [
+        0.001,
+        0.0005403,
+        -0.00041615,
+        -0.00098999
+      ],
+      "mtqDipoleAm2": [
+        0.03,
+        0,
+        0
+      ],
+      "sunEci": [
+        0.221,
+        -0.902,
+        0.371
+      ],
+      "moonEci": [
+        -0.52,
+        0.62,
+        0.58
+      ],
+      "bEciT": [
+        0,
+        0,
+        3.1E-05
+      ],
+      "eclipse": false,
+      "mode": "momentum-dump",
+      "quality": {
+        "attitudeValid": true,
+        "starTrackerValid": true,
+        "sampleSource": "demo-logged"
+      }
+    },
+    {
+      "tSec": 750,
+      "utc": "2026-06-01T12:12:30Z",
+      "positionEciKm": [
+        -449.384901,
+        4258.768483,
+        5373.228566
+      ],
+      "velocityEciKmS": [
+        -7.60025316,
+        -0.30942285,
+        -0.39039447
+      ],
+      "qEciToBody": [
+        0.0308991287,
+        -0.0107602151,
+        0.9438707393,
+        -0.3286905674
+      ],
+      "omegaBodyRadS": [
+        0.00377751,
+        0.00032702,
+        0.00385181
+      ],
+      "wheelMomentumNms": [
+        0.05,
+        -0.0375,
+        0.000998,
+        6.5E-05
+      ],
+      "rwTorqueBodyNm": [
+        0.00079829,
+        3.924E-05,
+        -6.526E-05
+      ],
+      "rwTauWheelsNm": [
+        0.00099786,
+        0.00048411,
+        -0.00047473,
+        -0.0009971
+      ],
+      "mtqDipoleAm2": [
+        0.029936,
+        -0.001308,
+        0
+      ],
+      "sunEci": [
+        0.221,
+        -0.902,
+        0.371
+      ],
+      "moonEci": [
+        -0.52,
+        0.62,
+        0.58
+      ],
+      "bEciT": [
+        0,
+        0,
+        3.1E-05
+      ],
+      "eclipse": false,
+      "mode": "momentum-dump",
+      "quality": {
+        "attitudeValid": true,
+        "starTrackerValid": true,
+        "sampleSource": "demo-logged"
+      }
+    },
+    {
+      "tSec": 780,
+      "utc": "2026-06-01T12:13:00Z",
+      "positionEciKm": [
+        -896.845467,
+        4231.393867,
+        5338.690396
+      ],
+      "velocityEciKmS": [
+        -7.55140007,
+        -0.6175207,
+        -0.77911722
+      ],
+      "qEciToBody": [
+        0.0617651698,
+        -0.0215089078,
+        0.9423543879,
+        -0.328162518
+      ],
+      "omegaBodyRadS": [
+        0.00353389,
+        0.00065263,
+        0.00368065
+      ],
+      "wheelMomentumNms": [
+        0.052,
+        -0.039,
+        0.000991,
+        0.000131
+      ],
+      "rwTorqueBodyNm": [
+        0.00079316,
+        7.832E-05,
+        -0.00012941
+      ],
+      "rwTauWheelsNm": [
+        0.00099144,
+        0.00042585,
+        -0.00053127,
+        -0.00099994
+      ],
+      "mtqDipoleAm2": [
+        0.029743,
+        -0.002611,
+        0
+      ],
+      "sunEci": [
+        0.221,
+        -0.902,
+        0.371
+      ],
+      "moonEci": [
+        -0.52,
+        0.62,
+        0.58
+      ],
+      "bEciT": [
+        0,
+        0,
+        3.1E-05
+      ],
+      "eclipse": false,
+      "mode": "momentum-dump",
+      "quality": {
+        "attitudeValid": true,
+        "starTrackerValid": true,
+        "sampleSource": "demo-logged"
+      }
+    },
+    {
+      "tSec": 810,
+      "utc": "2026-06-01T12:13:30Z",
+      "positionEciKm": [
+        -1340.465603,
+        4185.899774,
+        5281.291135
+      ],
+      "velocityEciKmS": [
+        -7.47021073,
+        -0.92297423,
+        -1.16450367
+      ],
+      "qEciToBody": [
+        0.0925650712,
+        -0.0322345683,
+        0.9398289399,
+        -0.3272830639
+      ],
+      "omegaBodyRadS": [
+        0.00330598,
+        0.00097545,
+        0.00351709
+      ],
+      "wheelMomentumNms": [
+        0.054,
+        -0.0405,
+        0.000981,
+        0.000195
+      ],
+      "rwTorqueBodyNm": [
+        0.00078463,
+        0.00011705,
+        -0.00019134
+      ],
+      "rwTauWheelsNm": [
+        0.00098079,
+        0.00036576,
+        -0.00058555,
+        -0.0009985
+      ],
+      "mtqDipoleAm2": [
+        0.029424,
+        -0.003902,
+        0
+      ],
+      "sunEci": [
+        0.221,
+        -0.902,
+        0.371
+      ],
+      "moonEci": [
+        -0.52,
+        0.62,
+        0.58
+      ],
+      "bEciT": [
+        0,
+        0,
+        3.1E-05
+      ],
+      "eclipse": false,
+      "mode": "momentum-dump",
+      "quality": {
+        "attitudeValid": true,
+        "starTrackerValid": true,
+        "sampleSource": "demo-logged"
+      }
+    },
+    {
+      "tSec": 840,
+      "utc": "2026-06-01T12:14:00Z",
+      "positionEciKm": [
+        -1778.345659,
+        4122.481014,
+        5201.276574
+      ],
+      "velocityEciKmS": [
+        -7.35703279,
+        -1.22447545,
+        -1.54490353
+      ],
+      "qEciToBody": [
+        0.1232658516,
+        -0.0429257111,
+        0.9362970995,
+        -0.326053147
+      ],
+      "omegaBodyRadS": [
+        0.00309277,
+        0.0012941,
+        0.0033608
+      ],
+      "wheelMomentumNms": [
+        0.056,
+        -0.042,
+        0.000966,
+        0.000259
+      ],
+      "rwTorqueBodyNm": [
+        0.00077274,
+        0.00015529,
+        -0.00025
+      ],
+      "rwTauWheelsNm": [
+        0.00096593,
+        0.0003041,
+        -0.00063731,
+        -0.00099278
+      ],
+      "mtqDipoleAm2": [
+        0.028978,
+        -0.005176,
+        0
+      ],
+      "sunEci": [
+        0.221,
+        -0.902,
+        0.371
+      ],
+      "moonEci": [
+        -0.52,
+        0.62,
+        0.58
+      ],
+      "bEciT": [
+        0,
+        0,
+        3.1E-05
+      ],
+      "eclipse": false,
+      "mode": "momentum-dump",
+      "quality": {
+        "attitudeValid": true,
+        "starTrackerValid": true,
+        "sampleSource": "demo-logged"
+      }
+    },
+    {
+      "tSec": 870,
+      "utc": "2026-06-01T12:14:30Z",
+      "positionEciKm": [
+        -2208.610566,
+        4041.409158,
+        5098.989349
+      ],
+      "velocityEciKmS": [
+        -7.21235091,
+        -1.52073327,
+        -1.91868788
+      ],
+      "qEciToBody": [
+        0.1538346359,
+        -0.0535708881,
+        0.9317626487,
+        -0.3244740841
+      ],
+      "omegaBodyRadS": [
+        0.0028933,
+        0.0016072,
+        0.00321146
+      ],
+      "wheelMomentumNms": [
+        0.058,
+        -0.0435,
+        0.000947,
+        0.000321
+      ],
+      "rwTorqueBodyNm": [
+        0.00075754,
+        0.00019286,
+        -0.00030438
+      ],
+      "rwTauWheelsNm": [
+        0.00094693,
+        0.00024115,
+        -0.00068635,
+        -0.00098282
+      ],
+      "mtqDipoleAm2": [
+        0.028408,
+        -0.006429,
+        0
+      ],
+      "sunEci": [
+        0.221,
+        -0.902,
+        0.371
+      ],
+      "moonEci": [
+        -0.52,
+        0.62,
+        0.58
+      ],
+      "bEciT": [
+        0,
+        0,
+        3.1E-05
+      ],
+      "eclipse": false,
+      "mode": "momentum-dump",
+      "quality": {
+        "attitudeValid": true,
+        "starTrackerValid": true,
+        "sampleSource": "demo-logged"
+      }
+    },
+    {
+      "tSec": 900,
+      "utc": "2026-06-01T12:15:00Z",
+      "positionEciKm": [
+        -2629.417864,
+        3943.031368,
+        4974.867468
+      ],
+      "velocityEciKmS": [
+        -7.03678464,
+        -1.81047908,
+        -2.28425611
+      ],
+      "qEciToBody": [
+        0.1842386902,
+        -0.0641587,
+        0.9262304431,
+        -0.3225475663
+      ],
+      "omegaBodyRadS": [
+        0.00270671,
+        0.00191342,
+        0.00306875
+      ],
+      "wheelMomentumNms": [
+        0.06,
+        -0.045,
+        0.000924,
+        0.000383
+      ],
+      "rwTorqueBodyNm": [
+        0.0007391,
+        0.00022961,
+        -0.00035355
+      ],
+      "rwTauWheelsNm": [
+        0.00092388,
+        0.00017716,
+        -0.00073244,
+        -0.00096864
+      ],
+      "mtqDipoleAm2": [
+        0.027716,
+        -0.007654,
+        0
+      ],
+      "sunEci": [
+        0.221,
+        -0.902,
+        0.371
+      ],
+      "moonEci": [
+        -0.52,
+        0.62,
+        0.58
+      ],
+      "bEciT": [
+        0,
+        0,
+        3.1E-05
+      ],
+      "eclipse": false,
+      "mode": "momentum-dump",
+      "quality": {
+        "attitudeValid": true,
+        "starTrackerValid": true,
+        "sampleSource": "demo-logged"
+      }
+    },
+    {
+      "tSec": 930,
+      "utc": "2026-06-01T12:15:30Z",
+      "positionEciKm": [
+        -3038.96559,
+        3827.768912,
+        4829.442442
+      ],
+      "velocityEciKmS": [
+        -6.83108577,
+        -2.09247214,
+        -2.64004281
+      ],
+      "qEciToBody": [
+        0.2144454571,
+        -0.0746778092,
+        0.9197064067,
+        -0.3202756565
+      ],
+      "omegaBodyRadS": [
+        0.00253214,
+        0.00221144,
+        0.00293238
+      ],
+      "wheelMomentumNms": [
+        0.062,
+        -0.0465,
+        0.000897,
+        0.000442
+      ],
+      "rwTorqueBodyNm": [
+        0.0007175,
+        0.00026537,
+        -0.00039668
+      ],
+      "rwTauWheelsNm": [
+        0.00089687,
+        0.00011241,
+        -0.0007754,
+        -0.00095031
+      ],
+      "mtqDipoleAm2": [
+        0.026906,
+        -0.008846,
+        0
+      ],
+      "sunEci": [
+        0.221,
+        -0.902,
+        0.371
+      ],
+      "moonEci": [
+        -0.52,
+        0.62,
+        0.58
+      ],
+      "bEciT": [
+        0,
+        0,
+        3.1E-05
+      ],
+      "eclipse": false,
+      "mode": "momentum-dump",
+      "quality": {
+        "attitudeValid": true,
+        "starTrackerValid": true,
+        "sampleSource": "demo-logged"
+      }
+    },
+    {
+      "tSec": 960,
+      "utc": "2026-06-01T12:16:00Z",
+      "positionEciKm": [
+        -3435.5,
+        3696.115362,
+        4663.337001
+      ],
+      "velocityEciKmS": [
+        -6.59613515,
+        -2.36550492,
+        -2.98452444
+      ],
+      "qEciToBody": [
+        0.2444225904,
+        -0.0851169515,
+        0.9121975257,
+        -0.3176607875
+      ],
+      "omegaBodyRadS": [
+        0.00236884,
+        0.0025,
+        0.00280208
+      ],
+      "wheelMomentumNms": [
+        0.064,
+        -0.048,
+        0.000866,
+        0.0005
+      ],
+      "rwTorqueBodyNm": [
+        0.00069282,
+        0.0003,
+        -0.00043301
+      ],
+      "rwTauWheelsNm": [
+        0.00086603,
+        4.718E-05,
+        -0.00081504,
+        -0.00092792
+      ],
+      "mtqDipoleAm2": [
+        0.025981,
+        -0.01,
+        0
+      ],
+      "sunEci": [
+        0.221,
+        -0.902,
+        0.371
+      ],
+      "moonEci": [
+        -0.52,
+        0.62,
+        0.58
+      ],
+      "bEciT": [
+        0,
+        0,
+        3.1E-05
+      ],
+      "eclipse": false,
+      "mode": "momentum-dump",
+      "quality": {
+        "attitudeValid": true,
+        "starTrackerValid": true,
+        "sampleSource": "demo-logged"
+      }
+    }
+  ],
+  "events": [
+    {
+      "tSec": 210,
+      "kind": "mode-change",
+      "label": "Detumble -> Target Track"
+    },
+    {
+      "tSec": 720,
+      "kind": "mode-change",
+      "label": "Target Track -> Momentum Dump"
+    }
+  ],
+  "constants": {
+    "earthRadiusKm": 6371
+  }
+}

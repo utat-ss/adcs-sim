@@ -1,4 +1,25 @@
 import { expect, test } from "@playwright/test";
+import path from "node:path";
+
+test("imports actual MATLAB results and renders Earth and spacecraft views", async ({ page }, testInfo) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.goto("/");
+  await page.locator("#replay-file").setInputFiles(process.env.ADCS_REPLAY_PATH ?? path.resolve("src/__tests__/fixtures/matlab-300s-subset.json"));
+  await expect(page.locator("#source-mode-output")).toContainText("MATLAB replay");
+  await expect(page.locator("#provenance-output")).toContainText("adcs_sim");
+  await page.locator("#play-toggle").click();
+  const end = Number(await page.locator("#time-scrubber").getAttribute("max"));
+  await page.locator("#time-scrubber").fill(String(end));
+  const endLabel = `T+${String(Math.floor(end/3600)).padStart(2,"0")}:${String(Math.floor(end/60)%60).padStart(2,"0")}:${String(end%60).padStart(2,"0")}`;
+  await expect(page.locator("#mission-time")).toContainText(endLabel);
+  await page.locator("#view-earth").click();
+  await page.screenshot({ path: testInfo.outputPath("actual-replay-earth.png"), fullPage: true });
+  await page.locator("#camera-select").selectOption("spacecraft");
+  await expect(page.locator("#camera-readout")).toContainText("Spacecraft");
+  await page.screenshot({ path: testInfo.outputPath("actual-replay-spacecraft.png"), fullPage: true });
+  expect(errors).toEqual([]);
+});
 
 test("renders an interactive nonblank WebGL mission scene", async ({ page }) => {
   await page.goto("/");
@@ -54,4 +75,31 @@ test("detumbling operation exposes live rate and progress", async ({ page }) => 
       return Number.parseFloat(width);
     })
     .toBeGreaterThan(0);
+});
+
+test("loads MATLAB replay, scrubs UTC timeline, switches cameras, and toggles layers", async ({ page }) => {
+  await page.goto("/");
+
+  await page.locator("#load-demo-replay").click();
+  await expect(page.locator("#source-mode-output")).toContainText("MATLAB replay");
+  await expect(page.locator("#schema-output")).toContainText("utat.adcs.replay.v1");
+  await expect(page.locator("#provenance-output")).toContainText("adcs_sim demo export");
+  await expect(page.locator("#quality-output")).toContainText("attitude");
+  await expect(page.locator("#wheel-output")).toContainText("Nms");
+
+  await page.locator("#time-scrubber").fill("300");
+  await expect(page.locator("#mission-time")).toContainText("T+00:05:00");
+
+  await page.locator("#camera-select").selectOption("spacecraft");
+  await expect(page.locator("#camera-readout")).toContainText("Spacecraft");
+  await page.locator("#view-earth").click();
+  await expect(page.locator("#camera-readout")).toContainText("Earth");
+
+  await page.locator("input[data-layer='footprint']").uncheck();
+  await expect(page.locator("#layer-count-output")).toContainText("9 on");
+  await page.locator("input[data-layer='footprint']").check();
+  await expect(page.locator("#layer-count-output")).toContainText("10 on");
+
+  const plotLength = await page.locator("#telemetry-plot").evaluate((node) => (node as HTMLCanvasElement).toDataURL("image/png").length);
+  expect(plotLength).toBeGreaterThan(5000);
 });

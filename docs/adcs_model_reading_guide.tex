@@ -16,7 +16,7 @@
     linkcolor=blue,
     urlcolor=blue,
     pdftitle={ADCS Simulink Model Reading Guide},
-    pdfauthor={OpenAI Codex}
+    pdfauthor={UTAT Space Systems ADCS}
 }
 
 \newcolumntype{Y}{>{\raggedright\arraybackslash}X}
@@ -120,7 +120,6 @@ The files that matter most when you want to understand the model are shown in Ta
 \texttt{simulate\_adcs\_case.m} & Shows the run workflow: initialize parameters, apply overrides, rebuild the model, simulate, summarize. \\
 \texttt{summarize\_adcs\_simulation.m} & Defines the derived metrics and the exact meaning of the main logged outputs. \\
 \texttt{reference.md} & Plain-language architecture, port map, and parameter quick-reference. \\
-\texttt{skills.md} & Domain notes for the intended physics, estimation, and control models. \\
 \bottomrule
 \end{tabularx}
 \caption{Files that function as the real source of truth when reading the model.}
@@ -961,7 +960,6 @@ If you only have ten minutes with the project, inspect these in order:
 \item \texttt{launch\_adcs\_gui.m}
 \item \texttt{simulate\_adcs\_case.m}
 \item \texttt{summarize\_adcs\_simulation.m}
-\item \texttt{skills.md}
 \end{itemize}
 
 \subsection*{External ADCS and modeling references}
