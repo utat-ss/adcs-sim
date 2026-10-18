@@ -1,9 +1,10 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import type { MissionSample, MissionTimeline, Vec3 } from "../types";
+import type { LayerVisibility, MissionSample, MissionTimeline, SceneViewMode, Vec3 } from "../types";
 import { EARTH_RADIUS_KM } from "../physics/constants";
-import { makeOrbitPath } from "../physics/orbit";
+import { makeOrbitPath, velocityFrame } from "../physics/orbit";
 import { moonDistanceKm, sunDistanceKm } from "../physics/environment";
+import { cross, degToRad, dot, normalize, scale } from "../physics/math";
 
 const KM_TO_SCENE = 1 / 2500;
 const EARTH_RADIUS_SCENE = EARTH_RADIUS_KM * KM_TO_SCENE;
@@ -34,13 +35,18 @@ export class AdcsScene {
   private readonly moonGroup = new THREE.Group();
   private readonly shadowGroup = new THREE.Group();
   private readonly vectorGroup = new THREE.Group();
+  private readonly bodyAxesGroup = new THREE.Group();
+  private readonly sensorGroup = new THREE.Group();
+  private readonly inertialAxesGroup = new THREE.Group();
+  private readonly lvlhAxesGroup = new THREE.Group();
+  private readonly footprintGroup = new THREE.Group();
   private readonly clock = new THREE.Clock();
   private readonly sunLight = new THREE.DirectionalLight(0xffffff, 2.85);
   private readonly ambientLight = new THREE.AmbientLight(0x91a7d6, 0.16);
   private readonly cameraVelocity = new THREE.Vector3();
 
   private missionSeconds = 0;
-  private viewMode: "orbit" | "chase" = "orbit";
+  private viewMode: Exclude<SceneViewMode, "chase"> = "orbit";
   private lastSampleIndex = -1;
   private animationId = 0;
   private earthMesh: THREE.Mesh | null = null;
@@ -50,6 +56,18 @@ export class AdcsScene {
   private targetMarker: THREE.Mesh | null = null;
   private groundTrackLine: THREE.Line | null = null;
   private activeMarker: THREE.Mesh | null = null;
+  private layerVisibility: LayerVisibility = {
+    orbit: true,
+    groundTrack: true,
+    target: true,
+    sunMoon: true,
+    shadow: true,
+    bodyAxes: true,
+    inertialAxes: true,
+    lvlhAxes: true,
+    sensorCone: true,
+    footprint: true
+  };
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -70,7 +88,7 @@ export class AdcsScene {
     this.renderer.toneMappingExposure = 1.12;
 
     this.camera = new THREE.PerspectiveCamera(44, 1, 0.01, 500);
-    this.camera.position.set(0, 8.6, 21.5);
+    this.camera.position.set(0, 6.2, 14.8);
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
@@ -79,7 +97,19 @@ export class AdcsScene {
     this.controls.maxDistance = 80;
     this.controls.target.set(0, 0, 0);
 
-    this.scene.add(this.earthGroup, this.orbitGroup, this.satelliteGroup, this.targetGroup, this.sunGroup, this.moonGroup, this.shadowGroup, this.vectorGroup);
+    this.scene.add(
+      this.earthGroup,
+      this.orbitGroup,
+      this.satelliteGroup,
+      this.targetGroup,
+      this.sunGroup,
+      this.moonGroup,
+      this.shadowGroup,
+      this.vectorGroup,
+      this.inertialAxesGroup,
+      this.lvlhAxesGroup,
+      this.footprintGroup
+    );
     this.scene.add(this.ambientLight, this.sunLight);
     this.scene.add(this.sunLight.target);
 
@@ -95,6 +125,8 @@ export class AdcsScene {
     clearGroup(this.orbitGroup);
     clearGroup(this.targetGroup);
     clearGroup(this.vectorGroup);
+    clearGroup(this.lvlhAxesGroup);
+    clearGroup(this.footprintGroup);
     this.targetLine = null;
     this.targetMarker = null;
     this.groundTrackLine = null;
@@ -107,15 +139,43 @@ export class AdcsScene {
     this.buildGroundTrack(timeline);
     this.buildTargetMarker(timeline.samples[0]);
     this.updateFromSample(timeline.samples[0]);
+    this.applyLayerVisibility();
   }
 
-  setViewMode(mode: "orbit" | "chase"): void {
-    this.viewMode = mode;
-    this.controls.enabled = mode === "orbit";
-    if (mode === "orbit") {
+  setViewMode(mode: SceneViewMode): void {
+    this.viewMode = mode === "chase" ? "spacecraft" : mode;
+    this.controls.enabled = this.viewMode !== "spacecraft";
+    if (this.viewMode === "orbit") {
       this.controls.target.set(0, 0, 0);
-      this.camera.position.set(0, 8.6, 21.5);
+      this.camera.position.set(0, 6.2, 14.8);
+    } else if (this.viewMode === "earth") {
+      this.controls.target.set(0, 0, 0);
+      this.camera.position.set(0, 0.8, 8.6);
     }
+  }
+
+  setTimeScale(scale: number): void {
+    this.timeScale = Number.isFinite(scale) ? Math.max(0, scale) : this.timeScale;
+  }
+
+  setPlaying(playing: boolean): void {
+    this.playing = playing;
+  }
+
+  setMissionSeconds(tSeconds: number): void {
+    if (!this.timeline) return;
+    const duration = this.timeline.config.durationHours * 3600;
+    this.missionSeconds = Math.max(0, Math.min(duration, tSeconds));
+    this.updateFromSample(this.sampleAt(this.missionSeconds), true);
+  }
+
+  getMissionSeconds(): number {
+    return this.missionSeconds;
+  }
+
+  setLayerVisibility(layers: Partial<LayerVisibility>): void {
+    this.layerVisibility = { ...this.layerVisibility, ...layers };
+    this.applyLayerVisibility();
   }
 
   togglePlaying(): boolean {
@@ -149,7 +209,7 @@ export class AdcsScene {
   private tick(deltaSeconds: number): void {
     if (this.timeline && this.playing) {
       const duration = this.timeline.config.durationHours * 3600;
-      this.missionSeconds = (this.missionSeconds + deltaSeconds * this.timeScale) % duration;
+      this.missionSeconds = duration > 0 ? (this.missionSeconds + deltaSeconds * this.timeScale) % duration : 0;
     }
 
     if (this.timeline) {
@@ -162,7 +222,7 @@ export class AdcsScene {
     this.renderer.render(this.scene, this.camera);
   }
 
-  private sampleAt(tSeconds: number): MissionSample {
+  sampleAt(tSeconds: number): MissionSample {
     if (!this.timeline) throw new Error("Timeline not loaded");
     const samples = this.timeline.samples;
     const duration = this.timeline.config.durationHours * 3600;
@@ -170,11 +230,10 @@ export class AdcsScene {
     return samples[Math.min(samples.length - 1, Math.max(0, Math.round(alpha * (samples.length - 1))))];
   }
 
-  private updateFromSample(sample: MissionSample): void {
+  private updateFromSample(sample: MissionSample, forceCallback = false): void {
     const position = toSceneVec(sample.state.positionKm);
-    const q = sample.attitude.quaternion;
     this.satelliteGroup.position.copy(position);
-    this.satelliteGroup.quaternion.set(q[1], q[2], q[3], q[0]);
+    this.satelliteGroup.quaternion.copy(quaternionFromEciBodyAxes(sample.attitude.bodyX, sample.attitude.bodyY, sample.attitude.bodyZ));
 
     if (this.activeMarker) {
       this.activeMarker.position.copy(position);
@@ -183,8 +242,10 @@ export class AdcsScene {
 
     this.updateLighting(sample);
     this.updateTargetLine(sample);
+    this.updateLvlhAxes(sample);
+    this.updateFootprint(sample);
 
-    if (this.viewMode === "chase") {
+    if (this.viewMode === "spacecraft") {
       const velocity = toSceneDirection(sample.state.velocityKmS);
       const radial = position.clone().normalize();
       const desired = position.clone().add(velocity.multiplyScalar(-1.2)).add(radial.multiplyScalar(0.75));
@@ -193,7 +254,7 @@ export class AdcsScene {
       this.camera.lookAt(position);
     }
 
-    if (sample.index !== this.lastSampleIndex) {
+    if (forceCallback || sample.index !== this.lastSampleIndex) {
       this.onSample?.(sample);
       this.lastSampleIndex = sample.index;
     }
@@ -243,12 +304,83 @@ export class AdcsScene {
     }
   }
 
+  private updateLvlhAxes(sample: MissionSample): void {
+    clearGroup(this.lvlhAxesGroup);
+    if (!this.layerVisibility.lvlhAxes) return;
+
+    const frame = velocityFrame(sample.state.positionKm, sample.state.velocityKmS);
+    const origin = toSceneVec(sample.state.positionKm);
+    this.lvlhAxesGroup.add(makeWorldAxisLine(origin, frame.alongTrack, 0x38bdf8, 0.42, "V"));
+    this.lvlhAxesGroup.add(makeWorldAxisLine(origin, scale(frame.radial, -1), 0x4ade80, 0.42, "N"));
+    this.lvlhAxesGroup.add(makeWorldAxisLine(origin, frame.crossTrack, 0xf472b6, 0.42, "H"));
+  }
+
+  private updateFootprint(sample: MissionSample): void {
+    clearGroup(this.footprintGroup);
+    if (!this.layerVisibility.footprint) return;
+
+    const halfAngleRad = degToRad(this.timeline?.config.spacecraft.cameraHalfAngleDeg ?? 8);
+    const boresight = normalize(sample.attitude.boresightEci);
+    const sat = sample.state.positionKm;
+    const fallback: Vec3 = Math.abs(dot(boresight, [0, 0, 1])) > 0.92 ? [0, 1, 0] : [0, 0, 1];
+    const u = normalize(cross(boresight, fallback), [1, 0, 0]);
+    const v = normalize(cross(boresight, u), [0, 1, 0]);
+    const points: THREE.Vector3[] = [];
+    const spokes: THREE.Line[] = [];
+    const footprintEarthRadiusKm = this.timeline?.constants?.earthRadiusKm ?? EARTH_RADIUS_KM;
+    const centerIntersection = raySphereIntersection(sat, boresight, footprintEarthRadiusKm);
+
+    for (let index = 0; index <= 64; index += 1) {
+      const theta = (index / 64) * Math.PI * 2;
+      const rimDirection = normalize([
+        boresight[0] * Math.cos(halfAngleRad) + (u[0] * Math.cos(theta) + v[0] * Math.sin(theta)) * Math.sin(halfAngleRad),
+        boresight[1] * Math.cos(halfAngleRad) + (u[1] * Math.cos(theta) + v[1] * Math.sin(theta)) * Math.sin(halfAngleRad),
+        boresight[2] * Math.cos(halfAngleRad) + (u[2] * Math.cos(theta) + v[2] * Math.sin(theta)) * Math.sin(halfAngleRad)
+      ]);
+      const hit = raySphereIntersection(sat, rimDirection, footprintEarthRadiusKm);
+      if (hit) points.push(toSceneVec(hit));
+      if (hit && index % 16 === 0) spokes.push(makeLine([toSceneVec(sat), toSceneVec(hit)], 0x4ade80, 0.2));
+    }
+
+    if (points.length > 8) {
+      this.footprintGroup.add(makeLineLoop(points, 0x4ade80, 0.54));
+      for (const spoke of spokes) this.footprintGroup.add(spoke);
+    }
+
+    if (centerIntersection) {
+      const marker = new THREE.Mesh(
+        new THREE.RingGeometry(0.045, 0.075, 32),
+        new THREE.MeshBasicMaterial({ color: 0x7dd3fc, transparent: true, opacity: 0.62, side: THREE.DoubleSide })
+      );
+      const pos = toSceneVec(centerIntersection);
+      marker.position.copy(pos);
+      marker.lookAt(pos.clone().multiplyScalar(1.5));
+      this.footprintGroup.add(marker);
+    }
+  }
+
+  private applyLayerVisibility(): void {
+    this.orbitGroup.visible = this.layerVisibility.orbit;
+    this.targetGroup.visible = this.layerVisibility.target;
+    this.sunGroup.visible = this.layerVisibility.sunMoon;
+    this.moonGroup.visible = this.layerVisibility.sunMoon;
+    this.shadowGroup.visible = this.layerVisibility.shadow;
+    this.bodyAxesGroup.visible = this.layerVisibility.bodyAxes;
+    this.sensorGroup.visible = this.layerVisibility.sensorCone;
+    this.inertialAxesGroup.visible = this.layerVisibility.inertialAxes;
+    this.lvlhAxesGroup.visible = this.layerVisibility.lvlhAxes;
+    this.footprintGroup.visible = this.layerVisibility.footprint;
+    if (this.groundTrackLine) this.groundTrackLine.visible = this.layerVisibility.groundTrack;
+    if (this.targetLine) this.targetLine.visible = this.layerVisibility.target;
+  }
+
   private buildStaticScene(): void {
     this.buildStars();
     this.buildEarth();
     this.buildSatellite();
     this.buildSunMoon();
     this.buildShadow();
+    this.buildInertialAxes();
   }
 
   private buildStars(): void {
@@ -363,8 +495,12 @@ export class AdcsScene {
 
     this.satelliteGroup.add(bus, panelLeft, panelRight, antenna);
     this.boresightLine = makeAxisLine([0, 0, 0], [0, 0, 0.82], 0x4ade80, 0.8);
-    this.satelliteGroup.add(this.boresightLine);
-    this.satelliteGroup.add(makeAxisLine([0, 0, 0], [0.74, 0, 0], 0xfacc15, 0.72));
+    this.bodyAxesGroup.add(makeAxisLine([0, 0, 0], [0.74, 0, 0], 0xfacc15, 0.72));
+    this.bodyAxesGroup.add(makeAxisLine([0, 0, 0], [0, 0.62, 0], 0x38bdf8, 0.72));
+    this.bodyAxesGroup.add(makeAxisLine([0, 0, 0], [0, 0, 0.82], 0x4ade80, 0.8));
+    this.sensorGroup.add(this.boresightLine);
+    this.sensorGroup.add(makeSensorCone(8));
+    this.satelliteGroup.add(this.bodyAxesGroup, this.sensorGroup);
     this.satelliteGroup.scale.setScalar(SATELLITE_VISUAL_SCALE);
 
     this.activeMarker = new THREE.Mesh(
@@ -406,6 +542,14 @@ export class AdcsScene {
     );
     cylinder.renderOrder = -1;
     this.shadowGroup.add(cylinder);
+  }
+
+  private buildInertialAxes(): void {
+    clearGroup(this.inertialAxesGroup);
+    const origin = new THREE.Vector3(0, 0, 0);
+    this.inertialAxesGroup.add(makeWorldAxisLine(origin, [1, 0, 0], 0xfacc15, 3.2, "ECI X"));
+    this.inertialAxesGroup.add(makeWorldAxisLine(origin, [0, 1, 0], 0x38bdf8, 3.2, "ECI Y"));
+    this.inertialAxesGroup.add(makeWorldAxisLine(origin, [0, 0, 1], 0x4ade80, 3.2, "ECI Z"));
   }
 
   private buildPhaseTubes(timeline: MissionTimeline): void {
@@ -454,6 +598,11 @@ function toSceneDirection(v: Vec3): THREE.Vector3 {
   return new THREE.Vector3(v[0], v[2], -v[1]).normalize();
 }
 
+export function quaternionFromEciBodyAxes(bodyX: Vec3, bodyY: Vec3, bodyZ: Vec3): THREE.Quaternion {
+  const matrix = new THREE.Matrix4().makeBasis(toSceneDirection(bodyX), toSceneDirection(bodyY), toSceneDirection(bodyZ));
+  return new THREE.Quaternion().setFromRotationMatrix(matrix);
+}
+
 function surfacePoint(positionKm: Vec3): Vec3 {
   const r = Math.hypot(positionKm[0], positionKm[1], positionKm[2]);
   if (r < 1e-9) return [EARTH_RADIUS_KM, 0, 0];
@@ -497,6 +646,79 @@ function makeAxisLine(from: Vec3, to: Vec3, color: THREE.ColorRepresentation, op
     new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(...from), new THREE.Vector3(...to)]),
     new THREE.LineBasicMaterial({ color, transparent: true, opacity })
   );
+}
+
+function makeWorldAxisLine(origin: THREE.Vector3, directionEci: Vec3, color: THREE.ColorRepresentation, length: number, label: string): THREE.Group {
+  const group = new THREE.Group();
+  const direction = toSceneDirection(directionEci);
+  const end = origin.clone().add(direction.clone().multiplyScalar(length));
+  group.add(makeLine([origin, end], color, 0.68));
+
+  const tip = new THREE.Mesh(
+    new THREE.ConeGeometry(0.035, 0.12, 16),
+    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.78 })
+  );
+  tip.position.copy(end);
+  tip.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction);
+  group.add(tip);
+
+  const sprite = makeLabelSprite(label, color);
+  sprite.position.copy(end.clone().add(direction.clone().multiplyScalar(0.16)));
+  group.add(sprite);
+  return group;
+}
+
+function makeSensorCone(halfAngleDeg: number): THREE.LineSegments {
+  const halfAngle = degToRad(halfAngleDeg);
+  const length = 0.9;
+  const radius = Math.tan(halfAngle) * length;
+  const vertices: number[] = [];
+  for (let index = 0; index < 64; index += 1) {
+    const a = (index / 64) * Math.PI * 2;
+    const b = ((index + 1) / 64) * Math.PI * 2;
+    vertices.push(radius * Math.cos(a), radius * Math.sin(a), length, radius * Math.cos(b), radius * Math.sin(b), length);
+    if (index % 8 === 0) vertices.push(0, 0, 0, radius * Math.cos(a), radius * Math.sin(a), length);
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+  return new THREE.LineSegments(
+    geometry,
+    new THREE.LineBasicMaterial({ color: 0x4ade80, transparent: true, opacity: 0.32, depthWrite: false })
+  );
+}
+
+function makeLabelSprite(text: string, color: THREE.ColorRepresentation): THREE.Sprite {
+  const canvas = document.createElement("canvas");
+  canvas.width = 256;
+  canvas.height = 96;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("2D canvas unavailable");
+  ctx.font = "700 26px Inter, Segoe UI, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = new THREE.Color(color).getStyle();
+  ctx.shadowColor = "rgba(0,0,0,0.75)";
+  ctx.shadowBlur = 12;
+  ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false }));
+  sprite.scale.set(0.65, 0.24, 1);
+  return sprite;
+}
+
+function raySphereIntersection(origin: Vec3, directionInput: Vec3, radiusKm: number): Vec3 | null {
+  const direction = normalize(directionInput);
+  const b = 2 * dot(origin, direction);
+  const c = dot(origin, origin) - radiusKm * radiusKm;
+  const discriminant = b * b - 4 * c;
+  if (discriminant < 0) return null;
+  const sqrtD = Math.sqrt(discriminant);
+  const tNear = (-b - sqrtD) / 2;
+  const tFar = (-b + sqrtD) / 2;
+  const t = tNear > 0 ? tNear : tFar > 0 ? tFar : Number.NaN;
+  if (!Number.isFinite(t)) return null;
+  return [origin[0] + direction[0] * t, origin[1] + direction[1] * t, origin[2] + direction[2] * t];
 }
 
 function makeLatitudeLine(latDeg: number): THREE.Line {

@@ -1,6 +1,6 @@
 # ADCS Simulator — Technical Reference
 
-> **Purpose:** Model architecture details, signal/port mappings, and parameter tables. Extracted from `agents.md` to keep that file concise. See `agents.md` for the high-level project directory.
+> **Purpose:** Model architecture details, signal/port mappings, and parameter tables. See `README.md` for the high-level project directory.
 
 > **Current validation note:** the MATLAB-validated build currently runs with several compile-safe fallback MATLAB Function implementations in ENVIRONMENT, SENSORS, CONTROL, ACTUATORS, and disturbance-torque blocks. The table below reflects the currently running behavior, not the higher-fidelity designs previously prototyped in these builders.
 

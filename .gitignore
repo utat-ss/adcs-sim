@@ -12,7 +12,6 @@ slprj/
 .tmp_external_ref/
 
 # Local video/reference captures used for visual QA
-.codex-video-reference/
 *.mp4
 
 # Documentation build intermediates

@@ -45,10 +45,6 @@ results = run_adcs_tests();
 | `sim_config.m` | Structured compatibility view of the current simulator configuration |
 | `sim_config\` | Lightweight config hierarchy derived from `init_adcs_params.m` |
 | `reference.md` | Architecture, ports, and parameter reference |
-| `skills.md` | Physics, estimation, and control notes |
-| `agents.md` | Project map and workflow rules |
-| `logs.md` | Repository change log for notable recent updates |
-| `todo.md` | Task/status tracker |
 
 ## Notes
 

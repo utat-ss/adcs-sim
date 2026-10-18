@@ -1,26 +1,36 @@
 import "./styles.css";
 import { AdcsScene } from "./render/AdcsScene";
 import { loadProjectData } from "./data/loaders";
+import { parseReplayJson, replayToMissionTimeline } from "./data/replay";
 import { DETUMBLE_RESIDUAL_RATE_DEG_S, detumbleProgressForRate } from "./physics/attitude";
 import { buildMissionTimeline, defaultMissionConfig, missionConfigFromForm } from "./physics/mission";
 import { hohmannDeltaV, orbitalPeriodSeconds } from "./physics/orbit";
 import { EARTH_RADIUS_KM } from "./physics/constants";
-import type { EphemerisSample, MissionConfig, MissionSample, MissionTimeline, Vec3 } from "./types";
+import type { EphemerisSample, LayerVisibility, MissionConfig, MissionSample, MissionTimeline, SceneViewMode, Vec3 } from "./types";
 import { clamp, dot, norm, normalize, scale, sub } from "./physics/math";
 
 const canvas = query<HTMLCanvasElement>("#mission-canvas");
 const form = query<HTMLFormElement>("#mission-form");
 const playToggle = query<HTMLButtonElement>("#play-toggle");
 const viewEarth = query<HTMLButtonElement>("#view-earth");
+const viewOrbit = query<HTMLButtonElement>("#view-orbit");
 const viewSat = query<HTMLButtonElement>("#view-sat");
 const ambientToggle = query<HTMLButtonElement>("#ambient-toggle");
 const resetForm = query<HTMLButtonElement>("#reset-form");
+const replayFile = query<HTMLInputElement>("#replay-file");
+const loadDemoReplay = query<HTMLButtonElement>("#load-demo-replay");
+const usePreview = query<HTMLButtonElement>("#use-preview");
+const timeScrubber = query<HTMLInputElement>("#time-scrubber");
+const speedSelect = query<HTMLSelectElement>("#speed-select");
+const cameraSelect = query<HTMLSelectElement>("#camera-select");
+const telemetryPlot = query<HTMLCanvasElement>("#telemetry-plot");
 
 const scene = new AdcsScene(canvas);
 let missionConfig = defaultMissionConfig();
 let timeline: MissionTimeline | null = null;
 let ephemeris: EphemerisSample[] = [];
 let dataSource = "Built-in ADCS defaults";
+let isScrubbing = false;
 
 void initialize();
 
@@ -30,8 +40,9 @@ async function initialize(): Promise<void> {
   ephemeris = loaded.ephemeris;
   dataSource = loaded.source;
   fillForm(missionConfig);
-  applyMission(missionConfig);
   bindEvents();
+  applyMission(missionConfig);
+  scene.setTimeScale(Number(speedSelect.value));
   scene.start();
 }
 
@@ -53,20 +64,60 @@ function bindEvents(): void {
     applyMission(missionConfig);
   });
 
+  usePreview.addEventListener("click", () => applyMission(missionConfigFromForm(form, missionConfig)));
+
+  loadDemoReplay.addEventListener("click", async () => {
+    const response = await fetch("/data/matlab-replay-demo.json");
+    if (!response.ok) throw new Error("Demo replay JSON is unavailable.");
+    applyReplayText(await response.text(), "Demo replay");
+  });
+
+  replayFile.addEventListener("change", async () => {
+    const file = replayFile.files?.[0];
+    if (!file) return;
+    applyReplayText(await file.text(), file.name);
+  });
+
   playToggle.addEventListener("click", () => {
     const playing = scene.togglePlaying();
-    playToggle.textContent = playing ? "II" : ">";
-    playToggle.setAttribute("aria-label", playing ? "Pause propagation" : "Resume propagation");
+    if (playing && Number(speedSelect.value) === 0) {
+      speedSelect.value = "1";
+      scene.setTimeScale(1);
+    }
+    updatePlayButton(playing);
   });
 
-  viewEarth.addEventListener("click", () => {
-    scene.setViewMode("orbit");
-    setCameraReadout("Orbit camera");
+  speedSelect.addEventListener("change", () => {
+    const speed = Number(speedSelect.value);
+    scene.setTimeScale(speed);
+    scene.setPlaying(speed > 0);
+    updatePlayButton(speed > 0);
   });
 
-  viewSat.addEventListener("click", () => {
-    scene.setViewMode("chase");
-    setCameraReadout("Satellite chase");
+  timeScrubber.addEventListener("input", () => {
+    isScrubbing = true;
+    scene.setMissionSeconds(Number(timeScrubber.value));
+    setText("#scrub-time-output", formatDuration(Number(timeScrubber.value)));
+  });
+
+  timeScrubber.addEventListener("change", () => {
+    scene.setMissionSeconds(Number(timeScrubber.value));
+    isScrubbing = false;
+  });
+
+  viewEarth.addEventListener("click", () => setView("earth"));
+  viewOrbit.addEventListener("click", () => setView("orbit"));
+  viewSat.addEventListener("click", () => setView("spacecraft"));
+  cameraSelect.addEventListener("change", () => setView(cameraSelect.value as Exclude<SceneViewMode, "chase">));
+
+  query<HTMLElement>("#layer-controls").addEventListener("change", () => {
+    const layers: Partial<LayerVisibility> = {};
+    const controls = Array.from(document.querySelectorAll<HTMLInputElement>("#layer-controls input[data-layer]"));
+    for (const control of controls) {
+      layers[control.dataset.layer as keyof LayerVisibility] = control.checked;
+    }
+    scene.setLayerVisibility(layers);
+    setText("#layer-count-output", `${controls.filter((control) => control.checked).length} on`);
   });
 
   ambientToggle.addEventListener("click", () => {
@@ -76,12 +127,47 @@ function bindEvents(): void {
 
 function applyMission(config: MissionConfig): void {
   timeline = buildMissionTimeline(config, ephemeris, dataSource);
-  scene.setTimeline(timeline);
+  timeline.sourceKind = "preview";
+  applyTimeline(timeline);
+  setText("#source-mode-output", "Preview");
+  setText("#schema-output", "preview");
+  setText("#provenance-output", "Built-in analytic preview");
+  setText("#mission-subtitle", "Preview mode · synthetic orbit and attitude");
+  setText("#assumption-note", "Preview mode is illustrative web-only trajectory and attitude logic. It is useful for UI checks, not as validated Simulink output.");
+}
+
+function applyReplayText(text: string, label: string): void {
+  try {
+    const replay = parseReplayJson(text);
+    timeline = replayToMissionTimeline(replay, missionConfigFromForm(form, missionConfig));
+    applyTimeline(timeline);
+    const sourceLabel = replay.provenance?.model ? `${label} · ${replay.provenance.model}` : label;
+    setText("#source-mode-output", "MATLAB replay");
+    setText("#schema-output", replay.schema);
+    setText("#provenance-output", formatProvenance(timeline));
+    setText("#mission-subtitle", `${sourceLabel} · logged simulator replay`);
+    setText(
+      "#assumption-note",
+      "Replay mode draws logged MATLAB/Simulink states. The enlarged spacecraft, sensor cone, and footprint are visualization geometry; numerical parity comes from the exported telemetry, not this renderer."
+    );
+  } catch (error) {
+    setText("#assumption-note", error instanceof Error ? error.message : "Replay import failed.");
+  }
+}
+
+function applyTimeline(currentTimeline: MissionTimeline): void {
+  timeline = currentTimeline;
   scene.onSample = updateTelemetry;
-  renderPhaseList(timeline);
-  updateDerivedOutputs(config, timeline);
-  setText("#data-source", `${timeline.dataSource} | ${ephemeris.length || "analytic"} ephemeris samples`);
-  setText("#samples-output", `${timeline.samples.length} samples`);
+  scene.setTimeline(currentTimeline);
+  renderPhaseList(currentTimeline);
+  updateDerivedOutputs(currentTimeline.config, currentTimeline);
+  setText("#data-source", dataSourceLabel(currentTimeline));
+  setText("#samples-output", `${currentTimeline.samples.length} samples`);
+  timeScrubber.min = "0";
+  timeScrubber.max = String(Math.max(1, Math.round(currentTimeline.config.durationHours * 3600)));
+  timeScrubber.step = currentTimeline.samples.length > 1 ? String(Math.max(0.001, currentTimeline.samples[1].tSeconds - currentTimeline.samples[0].tSeconds)) : "1";
+  timeScrubber.value = "0";
+  drawTelemetryPlot(currentTimeline, 0);
 }
 
 function updateDerivedOutputs(config: MissionConfig, currentTimeline: MissionTimeline | null): void {
@@ -108,7 +194,33 @@ function updateTelemetry(sample: MissionSample): void {
   setText("#boresight-output", formatVec(sample.attitude.boresightEci));
   setText("#sun-output", formatVec(sample.environment.sunEci));
   setText("#mag-output", `${norm(sample.environment.magneticFieldUt).toFixed(1)} uT`);
+  updateReplayTelemetry(sample);
   setTimelineProgress(sample.tSeconds);
+  if (!isScrubbing) {
+    timeScrubber.value = String(sample.tSeconds);
+    setText("#scrub-time-output", formatDuration(sample.tSeconds));
+  }
+  if (timeline) drawTelemetryPlot(timeline, sample.tSeconds);
+}
+
+function updateReplayTelemetry(sample: MissionSample): void {
+  const replay = sample.replay;
+  if (!replay) {
+    setText("#quality-output", "preview");
+    setText("#omega-output", "not logged");
+    setText("#wheel-output", "not logged");
+    setText("#rw-output", "not logged");
+    setText("#mtq-output", "not logged");
+    return;
+  }
+
+  const attitude = replay.attitudeValid === false ? "attitude invalid" : "attitude valid";
+  const tracker = replay.starTrackerValid === false ? "tracker invalid" : replay.starTrackerValid === true ? "tracker valid" : "tracker n/a";
+  setText("#quality-output", `${attitude} · ${tracker}`);
+  setText("#omega-output", replay.omegaBodyRadS ? `${formatVec(replay.omegaBodyRadS)} rad/s` : "not logged");
+  setText("#wheel-output", replay.wheelMomentumNms ? `[${replay.wheelMomentumNms.map((value) => value.toFixed(4)).join(", ")}] Nms` : "not logged");
+  setText("#rw-output", replay.rwTorqueBodyNm ? `${formatVec(replay.rwTorqueBodyNm)} Nm` : "not logged");
+  setText("#mtq-output", replay.mtqDipoleAm2 ? `${formatVec(replay.mtqDipoleAm2)} A·m²` : "not logged");
 }
 
 function renderPhaseList(currentTimeline: MissionTimeline): void {
@@ -161,6 +273,12 @@ function setText(selector: string, text: string): void {
   query<HTMLElement>(selector).textContent = text;
 }
 
+function setView(mode: Exclude<SceneViewMode, "chase">): void {
+  scene.setViewMode(mode);
+  cameraSelect.value = mode;
+  setCameraReadout(mode === "earth" ? "Earth camera" : mode === "spacecraft" ? "Spacecraft camera" : "Orbit camera");
+}
+
 function setCameraReadout(text: string): void {
   setText("#camera-readout", text);
 }
@@ -200,20 +318,18 @@ function operationStatus(sample: MissionSample): { label: string; progressPercen
 
   if (sample.attitude.mode === "target-track") {
     const target = normalize(sub(sample.environment.targetEciKm, sample.state.positionKm), sample.attitude.boresightEci);
-    const progressPercent = alignmentPercent(sample.attitude.boresightEci, target);
     return {
       label: "Target Track",
-      progressPercent,
+      progressPercent: alignmentPercent(sample.attitude.boresightEci, target),
       detail: sample.environment.targetVisible ? "Target visible" : "Target below horizon",
       phase
     };
   }
 
   if (sample.attitude.mode === "sun-track") {
-    const progressPercent = alignmentPercent(sample.attitude.boresightEci, sample.environment.sunEci);
     return {
       label: "Sun Track",
-      progressPercent,
+      progressPercent: alignmentPercent(sample.attitude.boresightEci, sample.environment.sunEci),
       detail: `Power ${sample.solarPowerW.toFixed(0)} W`,
       phase
     };
@@ -247,6 +363,90 @@ function phaseProgressPercent(sample: MissionSample): number {
   const span = currentPhase.endSeconds - currentPhase.startSeconds;
   if (span <= 0) return 100;
   return clamp(((sample.tSeconds - currentPhase.startSeconds) / span) * 100, 0, 100);
+}
+
+function drawTelemetryPlot(currentTimeline: MissionTimeline, activeT: number): void {
+  const ctx = telemetryPlot.getContext("2d");
+  if (!ctx) return;
+  const width = telemetryPlot.width;
+  const height = telemetryPlot.height;
+  ctx.clearRect(0, 0, width, height);
+  ctx.fillStyle = "rgba(2, 6, 23, 0.96)";
+  ctx.fillRect(0, 0, width, height);
+  ctx.strokeStyle = "rgba(148, 163, 184, 0.22)";
+  ctx.lineWidth = 1;
+  for (let i = 1; i < 4; i += 1) {
+    const y = (height / 4) * i;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(width, y);
+    ctx.stroke();
+  }
+
+  const duration = Math.max(1, currentTimeline.config.durationHours * 3600);
+  const rates = currentTimeline.samples.map((sample) => sample.attitude.angularRateDegS);
+  const momenta = currentTimeline.samples.map((sample) => normArray(sample.replay?.wheelMomentumNms));
+  drawSeries(ctx, currentTimeline.samples, rates, Math.max(0.01, ...rates), duration, width, height, "#7dd3fc");
+  if (momenta.some((value) => value > 0)) drawSeries(ctx, currentTimeline.samples, momenta, Math.max(0.001, ...momenta), duration, width, height, "#4ade80");
+
+  const x = clamp(activeT / duration, 0, 1) * width;
+  ctx.strokeStyle = "rgba(248, 250, 252, 0.72)";
+  ctx.beginPath();
+  ctx.moveTo(x, 0);
+  ctx.lineTo(x, height);
+  ctx.stroke();
+  ctx.fillStyle = "#94a3b8";
+  ctx.font = "22px system-ui";
+  ctx.fillText("rate deg/s", 12, 28);
+  ctx.fillStyle = "#4ade80";
+  ctx.fillText("|hW| Nms", 12, 55);
+}
+
+function drawSeries(
+  ctx: CanvasRenderingContext2D,
+  samples: MissionSample[],
+  values: number[],
+  maxValue: number,
+  duration: number,
+  width: number,
+  height: number,
+  color: string
+): void {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  values.forEach((value, index) => {
+    const x = clamp(samples[index].tSeconds / duration, 0, 1) * width;
+    const y = height - clamp(value / maxValue, 0, 1) * (height - 18) - 8;
+    if (index === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+}
+
+function normArray(values: number[] | undefined): number {
+  if (!values?.length) return 0;
+  return Math.hypot(...values);
+}
+
+function dataSourceLabel(currentTimeline: MissionTimeline): string {
+  if (currentTimeline.sourceKind === "replay") {
+    const frames = currentTimeline.frames?.attitudeQuaternion ?? "scalar-first ECI-to-body";
+    return `${currentTimeline.dataSource} | ${currentTimeline.samples.length} logged samples | ${frames}`;
+  }
+  return `${currentTimeline.dataSource} | ${ephemeris.length || "analytic"} ephemeris samples | Preview`;
+}
+
+function formatProvenance(currentTimeline: MissionTimeline): string {
+  const p = currentTimeline.provenance;
+  if (!p) return "No provenance block";
+  const parts = [p.source, p.model, p.matlabVersion, p.gitCommit ? p.gitCommit.slice(0, 8) : undefined, p.generatedAtUtc].filter(Boolean);
+  return parts.join(" · ") || "Provenance present";
+}
+
+function updatePlayButton(playing: boolean): void {
+  playToggle.textContent = playing ? "II" : ">";
+  playToggle.setAttribute("aria-label", playing ? "Pause propagation" : "Resume propagation");
 }
 
 function formatDuration(seconds: number): string {
