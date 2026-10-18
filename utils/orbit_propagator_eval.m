@@ -32,7 +32,7 @@ function [pos_eci, vel_eci] = orbit_propagator_eval(t, mu, Re, J2, a, ecc, inc_d
     nu = 2 * atan2(sqrt(1+ecc)*sin(E/2), sqrt(1-ecc)*cos(E/2));
     r_mag = a * (1 - ecc*cos(E));
     p_pqw = r_mag * [cos(nu); sin(nu); 0];
-    v_pqw = sqrt(mu*a)/r_mag * [-sin(E); sqrt(1-ecc^2)*cos(E); 0];
+    v_pqw = (a^2 * d_ma / r_mag) * [-sin(E); sqrt(1-ecc^2)*cos(E); 0];
 
     cO = cos(raan); sO = sin(raan);
     cw = cos(aop);  sw = sin(aop);
@@ -42,6 +42,14 @@ function [pos_eci, vel_eci] = orbit_propagator_eval(t, mu, Re, J2, a, ecc, inc_d
                      sO*cw + cO*sw*ci,  -sO*sw + cO*cw*ci,  -cO*si;
                      sw*si,              cw*si,               ci   ];
 
+    dR_draan = [ -sO*cw - cO*sw*ci,   sO*sw - cO*cw*ci,   cO*si;
+                  cO*cw - sO*sw*ci,  -cO*sw - sO*cw*ci,   sO*si;
+                  0,                   0,                  0     ];
+
+    dR_daop = [ -cO*sw - sO*cw*ci,  -cO*cw + sO*sw*ci,   0;
+                -sO*sw + cO*cw*ci,  -sO*cw - cO*sw*ci,   0;
+                 cw*si,              -sw*si,              0 ];
+
     pos_eci = R_pqw_to_eci * p_pqw;
-    vel_eci = R_pqw_to_eci * v_pqw;
+    vel_eci = R_pqw_to_eci * v_pqw + (d_raan * dR_draan + d_aop * dR_daop) * p_pqw;
 end

@@ -4,6 +4,29 @@ function results = summarize_adcs_simulation(sim_out)
     q_log = require_timeseries(sim_out, 'q_log');
     omega_log = require_timeseries(sim_out, 'omega_log');
     h_w_log = require_timeseries(sim_out, 'h_W_log');
+    sun_eci_log = optional_timeseries(sim_out, 'sun_eci_log');
+    moon_eci_log = optional_timeseries(sim_out, 'moon_eci_log');
+    b_eci_log = optional_timeseries(sim_out, 'B_eci_log');
+    pos_eci_log = optional_timeseries(sim_out, 'pos_eci_log');
+    vel_eci_log = optional_timeseries(sim_out, 'vel_eci_log');
+    eclipse_log = optional_timeseries(sim_out, 'eclipse_log');
+    q_meas_log = optional_timeseries(sim_out, 'q_meas_log');
+    omega_meas_log = optional_timeseries(sim_out, 'omega_meas_log');
+    sun_meas_log = optional_timeseries(sim_out, 'sun_meas_log');
+    b_body_meas_log = optional_timeseries(sim_out, 'B_body_meas_log');
+    pos_meas_log = optional_timeseries(sim_out, 'pos_meas_log');
+    vel_meas_log = optional_timeseries(sim_out, 'vel_meas_log');
+    tracker_valid_log = optional_timeseries(sim_out, 'tracker_valid_log');
+    rw_cmd_log = optional_timeseries(sim_out, 'rw_cmd_log');
+    mtq_cmd_log = optional_timeseries(sim_out, 'mtq_cmd_log');
+    cmg_cmd_log = optional_timeseries(sim_out, 'cmg_cmd_log');
+    q_est_log = optional_timeseries(sim_out, 'q_est_log');
+    q_des_log = optional_timeseries(sim_out, 'q_des_log');
+    att_valid_log = optional_timeseries(sim_out, 'att_valid_log');
+    mode_id_log = optional_timeseries(sim_out, 'mode_id_log');
+    ext_torque_log = optional_timeseries(sim_out, 'ext_torque_log');
+    rw_torque_body_log = optional_timeseries(sim_out, 'rw_torque_body_log');
+    rw_tau_wheels_log = optional_timeseries(sim_out, 'rw_tau_wheels_log');
 
     q = orient_samples(q_log.Data, 4);
     omega = orient_samples(omega_log.Data, 3);
@@ -28,6 +51,8 @@ function results = summarize_adcs_simulation(sim_out)
     rw_max_momentum = evalin('base', 'rw_max_momentum');
     rw_max_speed = evalin('base', 'rw_max_speed');
     rw_inertia = evalin('base', 'rw_inertia');
+    rw_axes = evalin('base', 'rw_axes');
+    mtq_axes = evalin('base', 'mtq_axes');
     rw_max_torque = evalin('base', 'rw_max_torque');
     mtq_max_dipole = evalin('base', 'mtq_max_dipole');
     cmg_max_torque = evalin('base', 'cmg_max_torque');
@@ -52,7 +77,7 @@ function results = summarize_adcs_simulation(sim_out)
     peak_wheel_speed_rpm = max(max(abs(wheel_speed_rpm)));
     peak_wheel_speed_util = peak_wheel_speed_rpm / rw_max_speed;
 
-    a_w = reaction_wheel_axes();
+    a_w = rw_axes;
     body_ang_momentum = (J * omega.').';
     wheel_body_momentum = (a_w * h_w.').';
     total_ang_momentum = body_ang_momentum + wheel_body_momentum;
@@ -80,6 +105,36 @@ function results = summarize_adcs_simulation(sim_out)
         'total_ang_momentum_nms', total_ang_momentum, ...
         'total_ang_momentum_norm_nms', total_ang_momentum_norm);
 
+    results.signals = append_optional_signal(results.signals, sun_eci_log, 'sun_eci_time_s', 'sun_eci', 3);
+    results.signals = append_optional_signal(results.signals, moon_eci_log, 'moon_eci_time_s', 'moon_eci', 3);
+    results.signals = append_optional_signal(results.signals, b_eci_log, 'B_eci_time_s', 'B_eci_T', 3);
+    results.signals = append_optional_signal(results.signals, pos_eci_log, 'pos_eci_time_s', 'pos_eci_m', 3);
+    results.signals = append_optional_signal(results.signals, vel_eci_log, 'vel_eci_time_s', 'vel_eci_mps', 3);
+    results.signals = append_optional_signal(results.signals, eclipse_log, 'eclipse_time_s', 'eclipse_flag', 1);
+    results.signals = append_optional_signal(results.signals, q_meas_log, 'q_meas_time_s', 'q_meas', 4);
+    results.signals = append_optional_signal(results.signals, omega_meas_log, 'omega_meas_time_s', 'omega_meas_rad_s', 3);
+    results.signals = append_optional_signal(results.signals, sun_meas_log, 'sun_meas_time_s', 'sun_meas_body', 3);
+    results.signals = append_optional_signal(results.signals, b_body_meas_log, 'B_body_meas_time_s', 'B_body_meas_T', 3);
+    results.signals = append_optional_signal(results.signals, pos_meas_log, 'pos_meas_time_s', 'pos_meas_m', 3);
+    results.signals = append_optional_signal(results.signals, vel_meas_log, 'vel_meas_time_s', 'vel_meas_mps', 3);
+    results.signals = append_optional_signal(results.signals, tracker_valid_log, 'tracker_valid_time_s', 'tracker_valid', 1);
+    results.signals = append_optional_signal(results.signals, rw_cmd_log, 'rw_cmd_time_s', 'rw_cmd_nm', 3);
+    results.signals = append_optional_signal(results.signals, mtq_cmd_log, 'mtq_cmd_time_s', 'mtq_cmd_am2', 3);
+    results.signals = append_optional_signal(results.signals, cmg_cmd_log, 'cmg_cmd_time_s', 'cmg_cmd', 3);
+    results.signals = append_optional_signal(results.signals, q_est_log, 'q_est_time_s', 'q_est', 4);
+    results.signals = append_optional_signal(results.signals, q_des_log, 'q_des_time_s', 'q_des', 4);
+    results.signals = append_optional_signal(results.signals, att_valid_log, 'att_valid_time_s', 'att_valid', 1);
+    results.signals = append_optional_signal(results.signals, mode_id_log, 'mode_id_time_s', 'mode_id', 1);
+    results.signals = append_optional_signal(results.signals, ext_torque_log, 'ext_torque_time_s', 'ext_torque_nm', 3);
+    results.signals = append_optional_signal(results.signals, rw_torque_body_log, 'rw_torque_body_time_s', 'rw_torque_body_nm', 3);
+    results.signals = append_optional_signal(results.signals, rw_tau_wheels_log, 'rw_tau_wheels_time_s', 'rw_tau_wheels_nm', 4);
+
+    peak_rw_cmd_nm = optional_peak_norm(results.signals, 'rw_cmd_nm');
+    peak_mtq_cmd_am2 = optional_peak_norm(results.signals, 'mtq_cmd_am2');
+    peak_ext_torque_nm = optional_peak_norm(results.signals, 'ext_torque_nm');
+    peak_rw_torque_body_nm = optional_peak_norm(results.signals, 'rw_torque_body_nm');
+    peak_rw_tau_wheels_nm = optional_peak_norm(results.signals, 'rw_tau_wheels_nm');
+
     results.metrics = struct( ...
         'duration_s', max([t_q(end), t_omega(end), t_h_w(end)]), ...
         'sample_count', size(q, 1), ...
@@ -100,7 +155,12 @@ function results = summarize_adcs_simulation(sim_out)
         'peak_wheel_momentum_utilization_pct', 100 * peak_wheel_momentum_util, ...
         'peak_wheel_speed_rpm', peak_wheel_speed_rpm, ...
         'peak_wheel_speed_utilization_pct', 100 * peak_wheel_speed_util, ...
-        'peak_total_ang_momentum_norm_nms', max(total_ang_momentum_norm));
+        'peak_total_ang_momentum_norm_nms', max(total_ang_momentum_norm), ...
+        'peak_rw_command_nm', peak_rw_cmd_nm, ...
+        'peak_mtq_command_am2', peak_mtq_cmd_am2, ...
+        'peak_ext_torque_nm', peak_ext_torque_nm, ...
+        'peak_rw_torque_body_nm', peak_rw_torque_body_nm, ...
+        'peak_rw_wheel_torque_nm', peak_rw_tau_wheels_nm);
 
     results.parameters = struct( ...
         'dt_s', dt, ...
@@ -110,11 +170,41 @@ function results = summarize_adcs_simulation(sim_out)
         'h_w0_nms', h_w0, ...
         'J_kgm2', J, ...
         'mass_sc_kg', mass_sc, ...
+        'spacecraft_dimensions_m', evalin('base', '[sc_dim_x; sc_dim_y; sc_dim_z]'), ...
+        'earth_radius_m', evalin('base', 'R_earth'), ...
+        'earth_mu_m3_s2', evalin('base', 'mu_earth'), ...
+        'earth_j2', evalin('base', 'J2_earth'), ...
+        'epoch_jd', evalin('base', 'epoch_jd'), ...
         'orbit_altitude_km', orbit_alt / 1e3, ...
+        'orbit_semi_major_axis_m', evalin('base', 'orbit_a'), ...
+        'orbit_eccentricity', evalin('base', 'orbit_ecc'), ...
+        'orbit_inclination_deg', evalin('base', 'orbit_inc'), ...
+        'orbit_raan_deg', evalin('base', 'orbit_RAAN'), ...
+        'orbit_arg_perigee_deg', evalin('base', 'orbit_AOP'), ...
+        'orbit_true_anomaly_deg', evalin('base', 'orbit_TA'), ...
         'orbit_period_min', orbit_period / 60, ...
+        'st_boresight_body', evalin('base', 'st_boresight'), ...
+        'st_noise_bore_arcsec', evalin('base', 'st_noise_bore'), ...
+        'st_noise_roll_arcsec', evalin('base', 'st_noise_roll'), ...
+        'st_sample_rate_hz', evalin('base', 'st_sample_rate'), ...
+        'st_exclusion_sun_deg', evalin('base', 'st_exclusion_sun'), ...
+        'st_exclusion_moon_deg', evalin('base', 'st_exclusion_moon'), ...
+        'st_exclusion_earth_deg', evalin('base', 'st_exclusion_earth'), ...
+        'fss_fov_half_deg', evalin('base', 'fss_fov_half'), ...
+        'fss_sample_rate_hz', evalin('base', 'fss_sample_rate'), ...
+        'fss_noise_sigma_deg', evalin('base', 'fss_noise_sigma'), ...
+        'imu_sample_rate_hz', evalin('base', 'imu_sample_rate'), ...
+        'imu_range_deg_s', evalin('base', 'imu_range'), ...
+        'mag_sample_rate_hz', evalin('base', 'mag_sample_rate'), ...
+        'gnss_sample_rate_hz', evalin('base', 'gnss_sample_rate'), ...
+        'visualization_camera_boresight_body', evalin('base', 'st_boresight'), ...
+        'visualization_camera_fov_half_deg', 8, ...
+        'visualization_camera_note', 'Illustrative +Z viewer cone; not a modeled payload camera or tracker acceptance angle.', ...
         'rw_max_momentum_nms', rw_max_momentum, ...
         'rw_max_speed_rpm', rw_max_speed, ...
         'rw_max_torque_nm', rw_max_torque, ...
+        'rw_axes_body', rw_axes, ...
+        'mtq_axes_body', mtq_axes, ...
         'mtq_max_dipole_am2', mtq_max_dipole, ...
         'cmg_max_torque_nm', cmg_max_torque);
 
@@ -138,7 +228,12 @@ function results = summarize_adcs_simulation(sim_out)
         'Peak wheel momentum utilization', format_scalar(results.metrics.peak_wheel_momentum_utilization_pct), '%';
         'Peak estimated wheel speed', format_scalar(results.metrics.peak_wheel_speed_rpm), 'RPM';
         'Peak wheel speed utilization', format_scalar(results.metrics.peak_wheel_speed_utilization_pct), '%';
-        'Peak total angular momentum norm', format_scalar(results.metrics.peak_total_ang_momentum_norm_nms), 'N*m*s'
+        'Peak total angular momentum norm', format_scalar(results.metrics.peak_total_ang_momentum_norm_nms), 'N*m*s';
+        'Peak RW command', format_scalar(results.metrics.peak_rw_command_nm), 'N*m';
+        'Peak MTQ command', format_scalar(results.metrics.peak_mtq_command_am2), 'A*m^2';
+        'Peak external torque', format_scalar(results.metrics.peak_ext_torque_nm), 'N*m';
+        'Peak RW body torque', format_scalar(results.metrics.peak_rw_torque_body_nm), 'N*m';
+        'Peak RW wheel torque', format_scalar(results.metrics.peak_rw_wheel_torque_nm), 'N*m'
         };
 
     results.parameter_rows = {
@@ -163,6 +258,38 @@ end
 function ts = require_timeseries(sim_out, name)
     ts = sim_out.get(name);
     assert(isa(ts, 'timeseries'), 'Expected %s timeseries output.', name);
+end
+
+
+function ts = optional_timeseries(sim_out, name)
+    ts = sim_out.get(name);
+    if isempty(ts)
+        ts = [];
+        return;
+    end
+
+    assert(isa(ts, 'timeseries'), 'Expected %s timeseries output.', name);
+end
+
+
+function signals = append_optional_signal(signals, ts, time_name, sample_name, width)
+    if isempty(ts)
+        return;
+    end
+
+    signals.(time_name) = ts.Time(:);
+    signals.(sample_name) = orient_samples(ts.Data, width);
+end
+
+
+function peak = optional_peak_norm(signals, sample_name)
+    if ~isfield(signals, sample_name)
+        peak = NaN;
+        return;
+    end
+
+    samples = signals.(sample_name);
+    peak = max(vecnorm(samples, 2, 2));
 end
 
 

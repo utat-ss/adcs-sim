@@ -1,5 +1,14 @@
-function fig = launch_adcs_gui()
+function fig = launch_adcs_gui(existing_results)
 %LAUNCH_ADCS_GUI Launch an interactive ADCS simulation dashboard.
+%
+%   launch_adcs_gui() opens the dashboard with editable default inputs.
+%   launch_adcs_gui(results) opens the dashboard and populates it from an
+%   existing results struct returned by simulate_adcs_case.
+%   launch_adcs_gui(matFile) loads a results struct from a MAT file.
+
+    if nargin < 1
+        existing_results = [];
+    end
 
     defaults = load_default_inputs();
 
@@ -38,6 +47,20 @@ function fig = launch_adcs_gui()
         'ButtonPushedFcn', @on_reset_button);
     reset_button.Layout.Row = row;
     reset_button.Layout.Column = [1 2];
+    row = row + 1;
+
+    load_button = uibutton(input_grid, 'push', ...
+        'Text', 'Load results', ...
+        'ButtonPushedFcn', @on_load_button);
+    load_button.Layout.Row = row;
+    load_button.Layout.Column = [1 2];
+    row = row + 1;
+
+    viewer_button = uibutton(input_grid, 'push', ...
+        'Text', 'Open 3D viewer', ...
+        'ButtonPushedFcn', @on_viewer_button);
+    viewer_button.Layout.Row = row;
+    viewer_button.Layout.Column = [1 2];
     row = row + 1;
 
     status_label = uilabel(input_grid, ...
@@ -108,6 +131,15 @@ function fig = launch_adcs_gui()
         'ColumnEditable', [false false false]);
 
     on_reset_button([], []);
+    if ~isempty(existing_results)
+        try
+            loaded_results = coerce_results(existing_results);
+            apply_results_to_dashboard(loaded_results, 'Loaded existing results.');
+        catch me
+            status_label.Text = 'Could not load supplied results.';
+            uialert(fig, getReport(me, 'extended', 'hyperlinks', 'off'), 'ADCS results load error');
+        end
+    end
 
     if nargout == 0
         clear fig
@@ -122,11 +154,7 @@ function fig = launch_adcs_gui()
         try
             [overrides, note_text] = collect_overrides();
             results = simulate_adcs_case(overrides);
-            fig.UserData = results;
-
-            update_plots(results);
-            metrics_table.Data = results.metric_rows;
-            params_table.Data = results.parameter_rows;
+            apply_results_to_dashboard(results, '');
 
             status_label.Text = sprintf(['Simulation complete. Peak rate %.3f deg/s, ' ...
                 'peak wheel momentum utilization %.1f%%. %s'], ...
@@ -140,6 +168,35 @@ function fig = launch_adcs_gui()
 
         run_button.Enable = 'on';
         reset_button.Enable = 'on';
+    end
+
+    function on_load_button(~, ~)
+        [file_name, file_path] = uigetfile('*.mat', 'Load ADCS results MAT file');
+        if isequal(file_name, 0)
+            return;
+        end
+
+        try
+            results = coerce_results(fullfile(file_path, file_name));
+            apply_results_to_dashboard(results, sprintf('Loaded %s.', file_name));
+        catch me
+            status_label.Text = 'Results load failed.';
+            uialert(fig, getReport(me, 'extended', 'hyperlinks', 'off'), 'ADCS results load error');
+        end
+    end
+
+    function on_viewer_button(~, ~)
+        if ~isa(fig.UserData, 'struct') || ~isfield(fig.UserData, 'signals')
+            uialert(fig, 'Load or run a simulation before opening the 3D viewer.', 'No results loaded');
+            return;
+        end
+
+        if exist('launch_adcs_3d_viewer', 'file') ~= 2
+            uialert(fig, 'launch_adcs_3d_viewer.m is not available on the MATLAB path.', '3D viewer unavailable');
+            return;
+        end
+
+        launch_adcs_3d_viewer(fig.UserData);
     end
 
     function on_reset_button(~, ~)
@@ -157,6 +214,16 @@ function fig = launch_adcs_gui()
         cla(omega_axes);
         cla(h_w_axes);
         cla(derived_axes);
+    end
+
+    function apply_results_to_dashboard(results, status_text)
+        fig.UserData = results;
+        update_plots(results);
+        metrics_table.Data = results.metric_rows;
+        params_table.Data = results.parameter_rows;
+        if ~isempty(status_text)
+            status_label.Text = status_text;
+        end
     end
 
     function [overrides, note_text] = collect_overrides()
@@ -231,14 +298,33 @@ function defaults = load_default_inputs()
     cleanup = onCleanup(@() cd(prev_dir));
     cd(repo_root);
 
-    evalin('base', 'init_adcs_params;');
+    run(fullfile(repo_root, 'init_adcs_params.m'));
     defaults = struct( ...
-        'dt', evalin('base', 'dt'), ...
-        't_end', evalin('base', 't_end'), ...
-        'q0', evalin('base', 'q0').', ...
-        'omega0', evalin('base', 'omega0').', ...
-        'h_W0', evalin('base', 'h_W0').', ...
-        'j_diag', diag(evalin('base', 'J')).');
+        'dt', dt, ...
+        't_end', t_end, ...
+        'q0', q0.', ...
+        'omega0', omega0.', ...
+        'h_W0', h_W0.', ...
+        'j_diag', diag(J).');
+end
+
+
+function results = coerce_results(results_or_path)
+    if ischar(results_or_path) || isstring(results_or_path)
+        data = load(results_or_path);
+        if isfield(data, 'results')
+            results = data.results;
+        else
+            fields = fieldnames(data);
+            assert(isscalar(fields), 'MAT file must contain a variable named results or exactly one variable.');
+            results = data.(fields{1});
+        end
+    else
+        results = results_or_path;
+    end
+
+    assert(isstruct(results) && isfield(results, 'signals') && isfield(results, 'metrics'), ...
+        'Expected a results struct returned by simulate_adcs_case.');
 end
 
 
