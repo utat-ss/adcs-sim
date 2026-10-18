@@ -12,8 +12,10 @@ slprj/
 .tmp_external_ref/
 
 # Local video/reference captures used for visual QA
-.codex-video-reference/
 *.mp4
+
+# Simulation outputs written by export_adcs_results / run_pointing_validation
+validation_logs/
 
 # Documentation build intermediates
 docs/*.aux

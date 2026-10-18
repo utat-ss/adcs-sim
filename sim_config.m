@@ -8,7 +8,7 @@ function cfg = sim_config()
 
     repo_root = fileparts(mfilename('fullpath'));
     prev_dir = pwd;
-    cleanup = onCleanup(@() cd(prev_dir)); %#ok<NASGU>
+    cleanup = onCleanup(@() cd(prev_dir));
     cd(repo_root);
 
     run(fullfile(repo_root, 'init_adcs_params.m'));

@@ -121,8 +121,8 @@ fss_boresights = [ 1  0  0;   % FSS 1: +X
                    0  0 -1]'; % FSS 6: -Z    (3 × 6 matrix, each column = boresight)
 
 % ── Star Tracker ──
-st_noise_bore    = 10;        % Boresight axis noise 1σ  [arcsec]
-st_noise_roll    = 40;        % Roll axis noise 1σ  [arcsec]
+st_noise_bore    = 10;        % Each transverse boresight-tilt axis noise 1σ [arcsec]
+st_noise_roll    = 40;        % Rotation about tracker boresight noise 1σ [arcsec]
 st_sample_rate   = 2;         % Sample rate  [Hz]
 st_exclusion_sun   = 45;      % Sun exclusion half-angle  [deg]
 st_exclusion_moon  = 25;      % Moon exclusion half-angle  [deg]
@@ -217,6 +217,56 @@ mekf_sun_sigma = fss_noise_sigma * pi/180;          % Sun vector angular noise  
 mekf_mag_sigma = max(mag_noise_sigma * 1e-9 / B0_earth, 1e-4);  % Normalized B-vector noise
 
 %% ════════════════════════════════════════════════════════════════════════
+%  CONSISTENCY CHECKS
+%  ════════════════════════════════════════════════════════════════════════
+
+assert(all(isfinite(J(:))) && all(eig(J) > 0), ...
+    'J must be finite and positive definite.');
+assert(all(isfinite(q0(:))) && norm(q0) > 0, ...
+    'q0 must be finite and nonzero.');
+assert(all(isfinite(omega0(:))) && numel(omega0) == 3, ...
+    'omega0 must be a finite 3-vector.');
+assert(all(isfinite(h_W0(:))) && numel(h_W0) == rw_num, ...
+    'h_W0 must be a finite vector with one value per reaction wheel.');
+
+sample_rates = [fss_sample_rate, st_sample_rate, imu_sample_rate, mag_sample_rate, gnss_sample_rate];
+assert(all(isfinite(sample_rates)) && all(sample_rates > 0), ...
+    'All sensor sample rates must be positive and finite.');
+sensor_periods = 1 ./ sample_rates;
+min_sensor_period = min(sensor_periods);
+assert(dt <= min_sensor_period + eps(min_sensor_period), ...
+    'dt must be no larger than the fastest configured sensor sample period (%.6g s).', ...
+    min_sensor_period);
+period_ratios = sensor_periods ./ dt;
+assert(max(abs(period_ratios - round(period_ratios))) < 1e-9, ...
+    'dt must divide every configured sensor sample period exactly.');
+assert(t_end >= dt, 't_end must be at least one integration step.');
+
+assert(numel(ephem_t_sec) >= 2 && all(isfinite(ephem_t_sec)) && all(diff(ephem_t_sec) > 0), ...
+    'Ephemeris time breakpoints must be finite, increasing, and contain at least two points.');
+assert(size(ephem_sun, 1) == numel(ephem_t_sec) && size(ephem_sun, 2) == 3, ...
+    'ephem_sun must have one 3-vector row per ephemeris timestamp.');
+assert(size(ephem_moon, 1) == numel(ephem_t_sec) && size(ephem_moon, 2) == 3, ...
+    'ephem_moon must have one 3-vector row per ephemeris timestamp.');
+assert(max(abs(vecnorm(ephem_sun, 2, 2) - 1)) < 1e-3, ...
+    'Sun ephemeris rows must be unit direction vectors.');
+assert(max(abs(vecnorm(ephem_moon, 2, 2) - 1)) < 1e-3, ...
+    'Moon ephemeris rows must be unit direction vectors.');
+
+csv_epoch_jd = 2461041.5;  % 2026-01-01T00:00:00Z, matching ephem_epoch
+sim_start_ephem_s = (epoch_jd - csv_epoch_jd) * 86400;
+sim_stop_ephem_s = sim_start_ephem_s + t_end;
+assert(sim_start_ephem_s >= ephem_t_sec(1) - 1e-6 && sim_stop_ephem_s <= ephem_t_sec(end) + 1e-6, ...
+    'Configured epoch_jd and t_end exceed the loaded ephemeris CSV coverage.');
+
+assert(all(size(rw_axes) == [3 4]) && rank(rw_axes) == 3, ...
+    'rw_axes must be a full-rank 3x4 pyramid mapping.');
+assert(max(abs(vecnorm(rw_axes, 2, 1) - 1)) < 1e-12, ...
+    'Each reaction-wheel axis must be unit length.');
+assert(all(size(mtq_axes) == [3 3]) && rank(mtq_axes) == 3, ...
+    'mtq_axes must be a full-rank 3x3 mapping.');
+
+%% ════════════════════════════════════════════════════════════════════════
 %  PRINT SUMMARY
 %  ════════════════════════════════════════════════════════════════════════
 
@@ -230,5 +280,5 @@ fprintf('  Orbit period:         %.1f min\n', orbit_period/60);
 fprintf('  Sim duration:         %.0f s (%.1f orbits)\n', t_end, t_end/orbit_period);
 fprintf('  Time step:            %.2f s\n', dt);
 fprintf('  Sensors:              6 FSS, 1 ST, 1 IMU, 1 MAG, 1 GNSS\n');
-fprintf('  Actuators:            4 RW (pyramid), 3 MTQ, 1 CMG\n');
+fprintf('  Actuators:            4 RW (pyramid), 3 MTQ, CMG placeholder disabled\n');
 fprintf('──────────────────────────────────────────\n\n');
