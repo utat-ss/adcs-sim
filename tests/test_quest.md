@@ -143,3 +143,34 @@ EVERY SENSOR IS TREATED AS EQUALLY RELIABLE. (Which to be fair...I wouldn't know
 
 Insufficient Observation Tests
 High Noise and Ill conditioned tests.
+
+Ok...In the end I've finally done the actual work...I think...FINAL TOUCH UPS ARE REQUIRED. And I'm going to ask AI to refactor the code into PEP 8 Style.
+
+"""Tests and assumptions for the QUEST attitude estimator.
+
+Input contract:
+- V and W must be NumPy arrays with matching shape (3, m), where m >= 2.
+- Every observation vector must be finite and non-zero.
+- Each input set must contain at least two linearly independent vectors;
+  parallel or antiparallel-only observations do not determine attitude.
+- Array-like lists are not accepted. Invalid input types raise TypeError;
+  invalid shapes or observation data raise ValueError.
+
+Algorithm and convention:
+- QUEST returns a scalar-first quaternion [q0, q1, q2, q3].
+- Tests interpret that quaternion using the passive direction cosine matrix
+  convention and construct body observations as W = A @ V.
+- The implementation has no explicit observation weights or normalization.
+  Recovery tests therefore use unit vectors; non-unit observations are not
+  rejected and their magnitudes affect the solution.
+
+Coverage and known limits:
+- Recovery cases are noise-free and use deterministic inputs or locally
+  seeded random generators. Noisy-data accuracy is not tested here.
+- The quaternion result is expected to be finite and unit norm.
+- Exact 180-degree recovery is currently expected to fail; the strict xfail
+  captures the known numerical limitation. A separate degenerate-geometry
+  test checks only that this case returns a finite, unit quaternion, not that
+  the recovered attitude is correct.
+"""
+

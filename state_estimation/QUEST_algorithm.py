@@ -18,9 +18,26 @@ def QUEST(V: np.ndarray, W: np.ndarray):
         Corresponding measured observation vectors expressed in
         the spacecraft body frame. Expected shape is (3, m).
     :return: Quaternions indicating current attitude
+    :raises TypeError: If either input is not a NumPy array.
+    :raises ValueError: If the inputs have invalid dimensions, contain
+        non-finite or zero-length vectors, or do not provide enough
+        non-collinear observations.
     """
+    if not isinstance(V, np.ndarray) or not isinstance(W, np.ndarray):
+        raise TypeError("V and W must be NumPy arrays")
+    if V.ndim != 2 or W.ndim != 2 or V.shape[0] != 3 or W.shape[0] != 3:
+        raise ValueError("V and W must have shape (3, m)")
     if V.shape != W.shape:
-        raise ValueError("In correct length, V and W should have same number of element")
+        raise ValueError("V and W must have the same shape")
+    if V.shape[1] < 2:
+        raise ValueError("At least two observation vectors are required")
+    if not np.all(np.isfinite(V)) or not np.all(np.isfinite(W)):
+        raise ValueError("V and W must contain only finite values")
+    if np.any(np.linalg.norm(V, axis=0) == 0) or np.any(np.linalg.norm(W, axis=0) == 0):
+        raise ValueError("Observation vectors must have non-zero length")
+    if np.linalg.matrix_rank(V) < 2 or np.linalg.matrix_rank(W) < 2:
+        raise ValueError("V and W must each contain at least two non-collinear vectors")
+
     B = W @ V.T
     sigma = np.trace(B)
     H = B + B.T
@@ -34,11 +51,25 @@ def QUEST(V: np.ndarray, W: np.ndarray):
     b = sigma ** 2 + z.T @ z
     c = np.linalg.det(H) + z.T @ H @ z
     d = z.T @ H @ H @ z
-    eigval = np.roots([1, 0, -a-b, -c, a * b + c * sigma - d]).real
+    coefficients = [1, 0, -a-b, -c, a * b + c * sigma - d]
+    try:
+        eigval = np.roots(coefficients).real
+    except np.linalg.LinAlgError as exc:
+        raise ValueError("QUEST could not determine a finite eigenvalue") from exc
+    if not np.all(np.isfinite(eigval)):
+        raise ValueError("QUEST could not determine a finite eigenvalue")
     eigval_max = np.max(eigval)
     M = (eigval_max + sigma) * np.identity(3) - H
-    p = np.linalg.solve(M, z)
+    try:
+        p = np.linalg.solve(M, z)
+    except np.linalg.LinAlgError as exc:
+        raise ValueError(
+            "QUEST attitude solution is singular for these observations"
+        ) from exc
+    if not np.all(np.isfinite(p)):
+        raise ValueError("QUEST attitude solution contains non-finite values")
     q = np.concatenate(([1.0], p))
     q = normalize_quat(q)
+    if not np.all(np.isfinite(q)) or not np.isclose(np.linalg.norm(q), 1.0):
+        raise ValueError("QUEST produced an invalid quaternion")
     return q
-
