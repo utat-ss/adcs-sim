@@ -34,14 +34,17 @@ from utils.quaternion_math import (
     quat_from_rotvec,
 )
 
+
 def quat_to_rotmat(q: np.ndarray) -> np.ndarray:
     """Convert a scalar-first QUEST quaternion [w, x, y, z] to its passive DCM."""
     w, x, y, z = normalize_quat(q)
-    return np.array([
-        [1 - 2*(y**2 + z**2), 2*(x*y + w*z),     2*(x*z - w*y)],
-        [2*(x*y - w*z),     1 - 2*(x**2 + z**2), 2*(y*z + w*x)],
-        [2*(x*z + w*y),     2*(y*z - w*x),     1 - 2*(x**2 + y**2)]
-    ]) # wild goose array 
+    return np.array(
+        [
+            [1 - 2 * (y**2 + z**2), 2 * (x * y + w * z), 2 * (x * z - w * y)],
+            [2 * (x * y - w * z), 1 - 2 * (x**2 + z**2), 2 * (y * z + w * x)],
+            [2 * (x * z + w * y), 2 * (y * z - w * x), 1 - 2 * (x**2 + y**2)],
+        ]
+    )  # wild goose array
 
 
 def get_quat_angle_deg(q: np.ndarray) -> float:
@@ -56,6 +59,7 @@ def scalar_first_quat_from_rotvec(rotvec: np.ndarray) -> np.ndarray:
     q = quat_from_rotvec(rotvec)
     return q[[3, 0, 1, 2]]
 
+
 @pytest.mark.parametrize("m", [2, 3, 5, 20])
 def test_random_round_trip(m):
     """Test 1: Random round trip for various observation counts m."""
@@ -67,25 +71,27 @@ def test_random_round_trip(m):
 
     # Generate random reference vectors V and corresponding body vectors W
     v = rng.standard_normal((3, m))
-    v /= np.linalg.norm(v, axis=0, keepdims=True) # getting norms of the rvg (vector)
-    w = a_true @ v # multiplying the quarternion matrix with the random vectors
+    v /= np.linalg.norm(v, axis=0, keepdims=True)  # getting norms of the rvg (vector)
+    w = a_true @ v  # multiplying the quarternion matrix with the random vectors
 
     q_rec = QUEST(v, w)
     a_rec = quat_to_rotmat(q_rec)
 
-    np.testing.assert_allclose(a_rec, a_true, atol=1e-9) # objects equal upto desired tolerance
+    np.testing.assert_allclose(
+        a_rec, a_true, atol=1e-9
+    )  # objects equal upto desired tolerance
 
 
 def test_identity_rotation():
     """Test 2: V = W gives identity rotation matrix A almost equal to I."""
     rng = np.random.default_rng(300)
-    m = 5 
-    v = rng.standard_normal((3, m)) # 5 vectors
-    v /= np.linalg.norm(v, axis=0, keepdims=True) # normalized
-    w = v.copy() # Now, I may have to check whether this does a deep/shallow copy
+    m = 5
+    v = rng.standard_normal((3, m))  # 5 vectors
+    v /= np.linalg.norm(v, axis=0, keepdims=True)  # normalized
+    w = v.copy()  # Now, I may have to check whether this does a deep/shallow copy
 
-    q_rec = QUEST(v, w) # QUEST upon itself should give a quarternion
-    a_rec = quat_to_rotmat(q_rec) # corresponding to the identity vector when rotated
+    q_rec = QUEST(v, w)  # QUEST upon itself should give a quarternion
+    a_rec = quat_to_rotmat(q_rec)  # corresponding to the identity vector when rotated
 
     np.testing.assert_allclose(a_rec, np.eye(3), atol=1e-9)
 
@@ -96,7 +102,10 @@ def test_identity_rotation():
         (np.array([1.0, 0.0, 0.0]), 90.0),  # 90 degs about x
         (np.array([0.0, 1.0, 0.0]), 90.0),  # 90 degs about y
         (np.array([0.0, 0.0, 1.0]), 90.0),  # 90 degs about z
-        (np.array([1.0, 1.0, 1.0]) / np.sqrt(3.0), 30.0),  # 30 degs about [1,1,1]/sqrt(3)
+        (
+            np.array([1.0, 1.0, 1.0]) / np.sqrt(3.0),
+            30.0,
+        ),  # 30 degs about [1,1,1]/sqrt(3)
     ],
 )
 def test_known_axis_angle_cases(axis, angle_deg):
@@ -115,17 +124,13 @@ def test_known_axis_angle_cases(axis, angle_deg):
     # still checking recovery cases against known angles which is a property of quest
     # I don't really know where to find better valiadation conditions for this particular property of QUEST
     # because this does the effective same job as test 1
-    np.testing.assert_allclose(a_rec, a_true, atol=1e-9) 
+    np.testing.assert_allclose(a_rec, a_true, atol=1e-9)
 
 
 def test_minimal_case():
     """Test 4: Minimal case with m = 2 non-parallel vectors recovers A exactly."""
-    v = np.array([
-        [1.0, 0.0],
-        [0.0, 1.0],
-        [0.0, 0.0]
-    ]) 
-    
+    v = np.array([[1.0, 0.0], [0.0, 1.0], [0.0, 0.0]])
+
     rotvec = np.array([0.0, 0.0, np.radians(45.0)])
     q_true = scalar_first_quat_from_rotvec(rotvec)
     a_true = quat_to_rotmat(q_true)
@@ -175,9 +180,10 @@ def test_180_degree_rotation():
 
     np.testing.assert_allclose(a_rec, a_true, atol=1e-9)
 
+
 def test_quest_quaternion_is_unit_norm():
     """Test 6: QUEST returns a finite, unit scalar-first quaternion."""
-    rotvec = np.array([0.2, -0.4, 0.7]) 
+    rotvec = np.array([0.2, -0.4, 0.7])
     q_true = scalar_first_quat_from_rotvec(rotvec)
     a_true = quat_to_rotmat(q_true)
     v = np.eye(3)
@@ -244,6 +250,7 @@ def test_degenerate_geometry_has_defined_behavior():
         (np.eye(3)[:, :2], np.array([[1.0, 1.0], [0.0, 0.0], [0.0, 0.0]])),
         (np.eye(3)[:, :2], np.array([[1.0, -1.0], [0.0, 0.0], [0.0, 0.0]])),
     ]
+    # Basically if two vectors are aligned parallel to each other.
     for V, W in collinear_cases:
         with pytest.raises(ValueError, match="non-collinear"):
             QUEST(V, W)
