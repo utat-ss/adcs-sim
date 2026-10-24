@@ -102,7 +102,7 @@ def dynamics(t, x, J, torque_ext):
     ])
 
 
-def linearized_attitude_matrices(q_0, omega_0, J):
+def linearized_attitude_matrices(q_0, omega_0, J, J_inv = None):
     """
     Compute A, B for the linearized reduced-quaternion attitude system.
     Linearized system:
@@ -129,22 +129,23 @@ def linearized_attitude_matrices(q_0, omega_0, J):
             Linearized input matrix.
             Shape: (6, 3)
     """
-    J_inv = np.linalg.inv(J)
+    if J_inv is None:
+        J_inv = np.linalg.inv(J)
 
     q1, q2, q3 = q_0
     omega1, omega2, omega3 = omega_0
 
-    A_omega_omega = J_inv@(skew(J @ omega_0)-skew(omega_0)@J)
+    A_omega_omega = J_inv@(skew(J @ omega_0)-skew(omega_0)@J) #The top left block of the linearization matrix in equation 9 in linearized_dynamics_derivation.pdf. 
 
-    A_omega_q = np.zeros((3, 3))
+    A_omega_q = np.zeros((3, 3)) #The top right block
     
-    f = np.sqrt(1 - q1**2 - q2**2 - q3**2)
+    f = np.sqrt(1 - q1**2 - q2**2 - q3**2) #The scalar part of the quaternion.
 
     dg_domega = 0.5 * np.array([
         [f, -q3, q2],
         [q3, f, -q1],
         [-q2, q1, f],
-    ])
+    ]) # Jacobian of g with respect to omega, the bottom left block of the linearization matrix in equation 9 in linearized_dynamics_derivation.pdf.
     
     df_dq1 = -q1/f
     df_dq2 = -q2/f
@@ -166,16 +167,16 @@ def linearized_attitude_matrices(q_0, omega_0, J):
             df_dq2 * omega3 - omega1,
             df_dq3 * omega3,
         ],
-    ])
+    ]) # Jacobian of g with respect to q, the bottom right block of the linearization matrix in equation 9 in linearized_dynamics_derivation.pdf.
 
     A = np.block([
-        [A_omega_omega, A_omega_q],
-        [dg_domega,     dg_dq],
-    ])
+        [dg_dq, dg_domega],
+        [A_omega_q, A_omega_omega],
+    ]) # Concatenating the blocks
 
     B = np.vstack([
-        J_inv,
         np.zeros((3, 3)),
+        J_inv,
     ])
 
     return A, B
