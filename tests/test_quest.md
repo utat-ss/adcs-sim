@@ -1,3 +1,7 @@
+Disclaimer: The given stuff is vulgar and not extremely professional. But, I want to show a 
+proof of work.
+
+
 Ok.
 The reason I'm creating this file is because my dumaas can't keep track of shit in my working memory
 So...WTF am I doing?

@@ -1,10 +1,14 @@
 """Tests and assumptions for the QUEST attitude estimator.
 
 Input contract:
-- V and W must be NumPy arrays with matching shape (3, m), where m >= 2.
+- V and W must be NumPy arrays with matching shape (3, m), where m >= 2. 
+  The algorithm given doesn't check for this, so it is implied hopefully.
 - Every observation vector must be finite and non-zero.
 - Each input set must contain at least two linearly independent vectors;
   parallel or antiparallel-only observations do not determine attitude.
+- Now another thing that I'm confused about is how to cross test if this will
+  do the exact same thing as davenport's Q method or SVD aided EKF. Now, I would
+  write those functions myself, but then how do I test the validity of those functions.
 - Array-like lists are not accepted. Invalid input types raise TypeError;
   invalid shapes or observation data raise ValueError.
 
@@ -129,6 +133,7 @@ def test_known_axis_angle_cases(axis, angle_deg):
 
 def test_minimal_case():
     """Test 4: Minimal case with m = 2 non-parallel vectors recovers A exactly."""
+    # Again to test the mathematical accuracy of this thing.
     v = np.array([[1.0, 0.0], [0.0, 1.0], [0.0, 0.0]])
 
     rotvec = np.array([0.0, 0.0, np.radians(45.0)])
