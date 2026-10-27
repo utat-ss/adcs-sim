@@ -11,6 +11,7 @@ requires-python = ">=3.12"
 license = "MIT"
 dependencies = [
     "numpy>=2.4.6",
+    "pytest>=9.1.0",
 ]
 
 [project.optional-dependencies]
