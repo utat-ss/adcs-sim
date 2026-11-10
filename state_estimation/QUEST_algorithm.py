@@ -21,7 +21,14 @@ def QUEST(V: np.ndarray, W: np.ndarray):
         equivalently W = quat_to_rotmat(q).T @ V for exact observations.
     """
     if V.shape != W.shape:
-        raise ValueError("In correct length, V and W should have same number of element")
+        raise ValueError("Incorrect length, V and W should have same number of element")
+    for i in range(len(V)):
+        if (V[i] != np.nan and W[i] != np.nan) or (V[i] != [0,0,0] and W[i] != [0,0,0]):
+            for j in range(len(V[i])):
+                if V[i][j] == np.nan and W[i][j] == np.nan:
+                    raise ValueError("element in W and V should not be np.nan")
+        else:
+            raise ValueError("W and V should not be np.nan or 0")
     B = W @ V.T
     sigma = np.trace(B)
     H = B + B.T
