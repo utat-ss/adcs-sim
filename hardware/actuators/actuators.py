@@ -88,7 +88,7 @@ class VirtualRWL(VirtualActuator):
 
         self.model = cfg_data.get("model", self.model)
         self.max_torque_Nm = float(cfg_data["max_torque_Nm"])
-        self.max_speed_rad_s = float(cfg_data["max_speed_rad_s"])
+        self.max_omega_rad_s = float(cfg_data["max_omega_rad_s"])
         self.moment_of_inertia_kg_m2 = float(cfg_data["moment_of_inertia_kg_m2"])
         self.tau_s = float(cfg_data["tau_s"])
 
@@ -98,8 +98,8 @@ class VirtualRWL(VirtualActuator):
             raise ValueError("Reaction wheel moment of inertia must be positive and finite.")
         if not np.isfinite(self.max_torque_Nm) or self.max_torque_Nm <= 0:
             raise ValueError("Reaction wheel maximum torque must be positive and finite.")
-        if not np.isfinite(self.max_speed_rad_s) or self.max_speed_rad_s <= 0:
-            raise ValueError("Reaction wheel maximum speed must be positive and finite.")
+        if not np.isfinite(self.max_omega_rad_s) or self.max_omega_rad_s <= 0:
+            raise ValueError("Reaction wheel maximum angular velocity must be positive and finite.")
         if not np.isfinite(self.tau_s) or self.tau_s <= 0:
             raise ValueError("Reaction wheel time constant must be positive and finite.")
 
@@ -123,7 +123,9 @@ class VirtualRWL(VirtualActuator):
 
         The function returns the wheel's state derivative rather than
         updating its state, allowing an external ODE solver to perform
-        time integration.
+        time integration. However, this implies that this command function 
+        does not prevent the wheel from exceeding its maximum speed, since the
+        time step is based on the ODE solver's integration step.
 
         Arguments:
             target_torque: (float)
@@ -158,15 +160,13 @@ class VirtualRWL(VirtualActuator):
             raise ValueError("Target torque and current state must be finite.")
 
         target_torque = float(np.clip(target_torque, -self.max_torque_Nm, self.max_torque_Nm))
-
+        current_torque = float(np.clip(current_torque, -self.max_torque_Nm, self.max_torque_Nm))
         # First-Order Dynamics for Torque
         d_torque_dt = (target_torque - current_torque) / self.tau_s
 
-        current_torque = float(np.clip(current_torque, -self.max_torque_Nm, self.max_torque_Nm))
-
-        if current_speed >= self.max_speed_rad_s and current_torque > 0:
+        if current_speed >= self.max_omega_rad_s and current_torque > 0:
             current_torque = 0.0
-        elif current_speed <= -self.max_speed_rad_s and current_torque < 0:
+        elif current_speed <= -self.max_omega_rad_s and current_torque < 0:
             current_torque = 0.0
 
         angular_acceleration = (current_torque / self.moment_of_inertia_kg_m2)
