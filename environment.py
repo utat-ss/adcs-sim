@@ -154,3 +154,31 @@ def aerodynamic_drag_perturbation_m_s2(
     factor = -(0.5 * air_kg_m3 * drag_coeff * area_m_2) / mass_kg
 
     return factor * speed * v_relative_m_s
+
+def gravity_gradient_torque(r_body: np.ndarray, I: np.ndarray):
+    """
+    Calculate gravity gradient torque acting on the spacecraft.
+    
+    Arguments:
+    r_body (np.ndarray): x, y, z -> Position vector of the satellite from body frame [m].
+    I (np.ndarray): 3x3 spacecraft Inertia Tensor (Spacecraft Inertia Matrix) [kg*m^2].
+    
+    Returns:
+    Lg (np.ndarray): [Lg_x, Lg_y, Lg_z] -> Gravity gradient torque vector in the Body frame [N*m].
+    """
+
+    mu = const.EARTH_MU_m3_s2
+    R_c = np.linalg.norm(r_body)
+    principal_inertias, _ = np.linalg.eigh(I)
+
+    Rc1, Rc2, Rc3 = r_body
+    I1, I2, I3 = principal_inertias
+    
+    prefactor = (3.0 * mu) / (R_c ** 5)
+    Lg_x = prefactor * Rc2 * Rc3 * (I3 - I2)
+    Lg_y = prefactor * Rc1 * Rc3 * (I1 - I3)
+    Lg_z = prefactor * Rc1 * Rc2 * (I2 - I1)
+    
+    Lg = np.array([Lg_x, Lg_y, Lg_z])
+    
+    return Lg
