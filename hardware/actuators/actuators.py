@@ -79,9 +79,7 @@ class VirtualRWL(VirtualActuator):
         cfg_file = Path(cfg_file)
 
         if not cfg_file.is_file():
-            raise FileNotFoundError(
-                f"Configuration file {cfg_file} does not exist."
-            )
+            raise FileNotFoundError(f"Configuration file path {cfg_file} does not exist.")
 
         with open(cfg_file, "r") as f:
             cfg_data = json.load(f)
@@ -105,9 +103,6 @@ class VirtualRWL(VirtualActuator):
 
     def command(self, target_torque: float, current_state: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """
-        Calculate the response of a virtual reaction wheel to a motor
-        torque command, subject to torque and rotational speed limits.
-
         The wheel is modeled as a rigid rotor with a constant moment
         of inertia. The motor torque produces angular acceleration
         according to Newton's second law for rotation.
@@ -157,7 +152,7 @@ class VirtualRWL(VirtualActuator):
         current_speed, current_torque = current_state
 
         if not np.isfinite(target_torque) or not np.all(np.isfinite(current_state)):
-            raise ValueError("Target torque and current state must be finite.")
+            raise ValueError("Target torque and current state values must be finite.")
 
         target_torque = float(np.clip(target_torque, -self.max_torque_Nm, self.max_torque_Nm))
         current_torque = float(np.clip(current_torque, -self.max_torque_Nm, self.max_torque_Nm))
