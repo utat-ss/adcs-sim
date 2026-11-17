@@ -60,7 +60,7 @@ class VirtualRWL(VirtualActuator):
 
         self.model: str = "Generic RWL"
         self.max_torque_Nm: float = 0.0
-        self.max_speed_rad_s: float = 0.0
+        self.max_omega_rad_s: float = 0.0
         self.moment_of_inertia_kg_m2: float = 0.0
         self.tau_s: float = 0.0
 
@@ -119,8 +119,8 @@ class VirtualRWL(VirtualActuator):
         The function returns the wheel's state derivative rather than
         updating its state, allowing an external ODE solver to perform
         time integration. However, this implies that this command function 
-        does not prevent the wheel from exceeding its maximum speed, since the
-        time step is based on the ODE solver's integration step.
+        may not prevent the wheel from exceeding its maximum speed, since the
+        time step is defined by the ODE solver.
 
         Arguments:
             target_torque: (float)
@@ -149,24 +149,28 @@ class VirtualRWL(VirtualActuator):
         if np.ndim(target_torque) != 0:
             raise ValueError("Target torque must be a scalar.")
 
-        current_speed, current_torque = current_state
+        current_omega, current_torque = current_state
 
         if not np.isfinite(target_torque) or not np.all(np.isfinite(current_state)):
             raise ValueError("Target torque and current state values must be finite.")
 
         target_torque = float(np.clip(target_torque, -self.max_torque_Nm, self.max_torque_Nm))
-        current_torque = float(np.clip(current_torque, -self.max_torque_Nm, self.max_torque_Nm))
-        # First-Order Dynamics for Torque
+
+        # First-order motor torque dynamics
+        if (current_omega >= self.max_omega_rad_s and target_torque > 0) or (current_omega <= -self.max_omega_rad_s and target_torque < 0):
+            target_torque = 0.0
+
         d_torque_dt = (target_torque - current_torque) / self.tau_s
 
-        if current_speed >= self.max_omega_rad_s and current_torque > 0:
-            current_torque = 0.0
-        elif current_speed <= -self.max_omega_rad_s and current_torque < 0:
-            current_torque = 0.0
+        applied_torque = float(np.clip(current_torque, -self.max_torque_Nm, self.max_torque_Nm)) # applied torque = clipped current torque since the motor responds gradually to the target torque, using 'applied torque = target torque' would ignore the motor's dynamics.
 
-        angular_acceleration = (current_torque / self.moment_of_inertia_kg_m2)
+        # Idealized speed protection
+        if (current_omega >= self.max_omega_rad_s and applied_torque > 0) or (current_omega <= -self.max_omega_rad_s and applied_torque < 0):
+            applied_torque = 0.0  # By setting applied torque to zero here, angular acceleration is also zero which simulates the inbuilt wheel speed management (if the hardware supports it)
 
-        return (np.array([angular_acceleration, d_torque_dt]), np.array([0.0, 0.0, -current_torque])) # Torque applied to spacecraft is equal and opposite to wheel torque along local z-axis of wheel
+        angular_acceleration = applied_torque / self.moment_of_inertia_kg_m2
+
+        return (np.array([angular_acceleration, d_torque_dt]), np.array([0.0, 0.0, -applied_torque]))
 
 
 class VirtualMTQ(VirtualActuator):
