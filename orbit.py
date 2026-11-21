@@ -5,6 +5,7 @@ import numpy as np
 from constants import G, M, mu
 from collections.abc import Callable
 from root_finding import *
+from sgp4.api import Satrec
 
 class KeplerianElements(BaseModel):
     """
@@ -570,18 +571,26 @@ def encke_motion(t: float, state: list[np.ndarray], p_m_s2: np.ndarray):
 
     return xdot
 
-def propagate_sgp4(tle: str, t: float):
+def propagate_sgp4(tle: str, t: float) -> np.ndarray:
     """
-    Propagate an orbit from an initial state given by a TLE using SGP4.
+    Propagate an orbit using SGP4.
 
     Arguments:
-    tle:    (str) Two Line Element set describing the orbital state at a specified epoch.
-    t:      (float) Time to retrieve orbital state vector.
+    tle:    (str) Two-Line Element set describing the orbit.
+    t:      (float) Time in seconds relative to the TLE epoch.
 
     Returns:
-    x:      (np.ndarray) Orbital state at specified time.
+    x:      (np.ndarray) Orbital state [rx, ry, rz, vx, vy, vz]
+            in the TEME reference frame.
+            Position: km
+            Velocity: km/s
     """
-    #TODO: Appropriate time specification (time since periapsis? epoch time?)
-    #TODO: SGP4 implementation
-    x = np.array([0., 0., 0., 0., 0., 0.])
-    return x
+    lines = tle.splitlines()
+
+    satellite = Satrec.twoline2rv(lines[0], lines[1])
+
+    # SGP4 expects minutes since TLE epoch.
+    _, r, v = satellite.sgp4_tsince(t / 60.0)
+    
+    return np.concatenate((r, v))
+
